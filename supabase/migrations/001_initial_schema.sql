@@ -482,14 +482,26 @@ RETURNS TRIGGER AS $$
 DECLARE
   new_org_id UUID;
   user_email TEXT;
+  org_name TEXT;
 BEGIN
   user_email := NEW.email;
+  
+  -- Check if user already exists (idempotency for retries)
+  IF EXISTS (SELECT 1 FROM users WHERE id = NEW.id) THEN
+    RETURN NEW;
+  END IF;
+  
+  -- Determine organization name
+  org_name := NULLIF(TRIM(COALESCE(NEW.raw_user_meta_data->>'organization_name', '')), '');
+  IF org_name IS NULL THEN
+    org_name := split_part(user_email, '@', 1) || '''s Organisation';
+  END IF;
   
   -- Create a new organization for the user
   INSERT INTO organizations (name, slug)
   VALUES (
-    COALESCE(NEW.raw_user_meta_data->>'organization_name', split_part(user_email, '@', 1) || '''s Organization'),
-    LOWER(REPLACE(COALESCE(NEW.raw_user_meta_data->>'organization_slug', NEW.id::TEXT), ' ', '-'))
+    org_name,
+    LOWER(REPLACE(NEW.id::TEXT, '-', ''))
   )
   RETURNING id INTO new_org_id;
   
@@ -499,11 +511,19 @@ BEGIN
     NEW.id,
     new_org_id,
     user_email,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(user_email, '@', 1)),
+    COALESCE(NULLIF(TRIM(NEW.raw_user_meta_data->>'full_name'), ''), split_part(user_email, '@', 1)),
     'owner'
   );
   
   RETURN NEW;
+EXCEPTION
+  WHEN unique_violation THEN
+    -- Handle race condition - org/user already created
+    RETURN NEW;
+  WHEN OTHERS THEN
+    -- Log error but don't fail auth
+    RAISE WARNING 'handle_new_user failed: %', SQLERRM;
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -543,3 +563,4 @@ BEGIN
   LIMIT match_count;
 END;
 $$;
+
