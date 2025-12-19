@@ -44,14 +44,19 @@ export async function createMatter(
   }
 
   // Get user's org
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("users")
     .select("org_id")
     .eq("id", user.id)
     .single();
 
+  if (profileError) {
+    console.error("Profile fetch error:", profileError);
+    return { success: false, error: `Profile error: ${profileError.message}` };
+  }
+
   if (!profile?.org_id) {
-    return { success: false, error: "No organisation found" };
+    return { success: false, error: `No organisation found for user ${user.id}` };
   }
 
   // Validate input
