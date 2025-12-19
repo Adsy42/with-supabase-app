@@ -204,8 +204,13 @@ CREATE POLICY "Users can view own organization"
   USING (id IN (SELECT org_id FROM users WHERE id = auth.uid()));
 
 -- ----------------------------------------------------------------------------
--- Users: Users can see members of their organization
+-- Users: Users can view own profile + org members
 -- ----------------------------------------------------------------------------
+CREATE POLICY "Users can view own profile"
+  ON users FOR SELECT
+  TO authenticated
+  USING (id = auth.uid());
+
 CREATE POLICY "Users can view org members"
   ON users FOR SELECT
   TO authenticated
