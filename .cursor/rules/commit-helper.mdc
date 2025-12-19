@@ -60,6 +60,53 @@ These branches are exempt from naming rules:
 
 ---
 
+# GitHub Branch Protection
+
+## Recommended Settings for `main`
+
+Configure at: **GitHub → Repo → Settings → Branches → Add rule**
+
+| Setting | Recommended | Why |
+|---------|-------------|-----|
+| **Require a pull request before merging** | ✅ On | Forces code review |
+| **Require approvals** | 1+ | At least one reviewer |
+| **Dismiss stale approvals** | ✅ On | Re-review after changes |
+| **Require status checks to pass** | ✅ On | CI must pass |
+| **Required checks** | `CI`, `Branch Name Check` | Add your workflow names |
+| **Require branches to be up to date** | ✅ On | No stale merges |
+| **Require conversation resolution** | ✅ On | Address all comments |
+| **Do not allow bypassing** | ✅ On | No admin bypass |
+
+## Quick Setup via GitHub CLI
+
+```bash
+# Enable branch protection for main
+gh api repos/{owner}/{repo}/branches/main/protection \
+  -X PUT \
+  -H "Accept: application/vnd.github+json" \
+  -f "required_status_checks[strict]=true" \
+  -f "required_status_checks[contexts][]=CI" \
+  -f "required_status_checks[contexts][]=Branch Name Check" \
+  -f "enforce_admins=true" \
+  -f "required_pull_request_reviews[dismiss_stale_reviews]=true" \
+  -f "required_pull_request_reviews[required_approving_review_count]=1"
+```
+
+## Why This Matters
+
+Without branch protection:
+- Direct pushes to `main` bypass CI
+- No code review required
+- Anyone can merge broken code
+
+With branch protection:
+- All changes go through PRs
+- CI validates every change
+- At least one approval required
+- `main` stays stable
+
+---
+
 # Commit Message Guidelines
 
 ## Format

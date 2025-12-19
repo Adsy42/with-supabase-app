@@ -191,13 +191,13 @@ setup_env() {
     echo ""
     
     prompt_input "Supabase Project URL" SUPABASE_URL ""
-    prompt_input "Supabase Anon Key (public)" SUPABASE_ANON_KEY ""
+    prompt_input "Supabase Publishable Key (anon/public key)" SUPABASE_KEY ""
     
     # Create .env.local
     cat > .env.local << EOF
 # Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
-NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${SUPABASE_KEY}
 EOF
     
     print_success ".env.local created!"
@@ -347,6 +347,9 @@ setup_git_hooks() {
     fi
     if [ -f ".husky/commit-msg" ]; then
         chmod +x .husky/commit-msg
+    fi
+    if [ -f ".husky/pre-push" ]; then
+        chmod +x .husky/pre-push
     fi
     
     print_success "Git hooks ready!"
