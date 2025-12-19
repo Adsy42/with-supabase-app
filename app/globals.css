@@ -98,9 +98,9 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
-  /* Focus ring - brand blue */
+  /* Focus ring - brand blue (base default, components can override) */
   *:focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    @apply outline-none ring-2 ring-ring ring-offset-background;
   }
 }
 
