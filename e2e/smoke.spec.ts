@@ -24,7 +24,8 @@ test.describe('Smoke Tests', () => {
     
     // Check that sign up form elements exist
     await expect(page.locator('input[type="email"], input[name="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"], input[name="password"]')).toBeVisible();
+    // Sign up has both password and repeat-password fields, check for the first one
+    await expect(page.locator('input#password')).toBeVisible();
   });
 
   test('navigation works', async ({ page }) => {
