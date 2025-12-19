@@ -4,8 +4,8 @@ test.describe('Smoke Tests', () => {
   test('homepage loads successfully', async ({ page }) => {
     await page.goto('/');
     
-    // Check that the page loaded
-    await expect(page).toHaveTitle(/Next.js/i);
+    // Check that the page loaded - updated for Orderly branding
+    await expect(page).toHaveTitle(/Orderly/i);
     
     // Check for main content
     await expect(page.locator('body')).toBeVisible();
@@ -58,4 +58,3 @@ test.describe('Smoke Tests', () => {
     expect(criticalErrors).toHaveLength(0);
   });
 });
-
