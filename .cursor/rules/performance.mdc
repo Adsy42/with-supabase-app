@@ -1,0 +1,326 @@
+---
+description: Performance optimization patterns for Next.js
+globs: ["app/**/*.ts", "app/**/*.tsx", "components/**/*.tsx"]
+---
+
+# Performance Optimization
+
+## Core Web Vitals Targets
+
+| Metric | Target | What It Measures |
+|--------|--------|------------------|
+| LCP | < 2.5s | Largest Contentful Paint |
+| FID | < 100ms | First Input Delay |
+| CLS | < 0.1 | Cumulative Layout Shift |
+| TTFB | < 800ms | Time to First Byte |
+
+## Server Components (Reduce JS Bundle)
+
+### Default to Server Components
+
+```typescript
+// ✅ Server Component - zero JS shipped
+export default async function ProductList() {
+  const products = await getProducts();
+  return (
+    <ul>
+      {products.map(p => <li key={p.id}>{p.name}</li>)}
+    </ul>
+  );
+}
+
+// Only add 'use client' when necessary
+```
+
+### Minimize Client Components
+
+```typescript
+// ❌ BAD: Entire page is client
+'use client';
+export default function Page() {
+  const [count, setCount] = useState(0);
+  return (
+    <div>
+      <Header />  {/* Unnecessarily client-side */}
+      <Counter count={count} setCount={setCount} />
+      <Footer />  {/* Unnecessarily client-side */}
+    </div>
+  );
+}
+
+// ✅ GOOD: Only interactive part is client
+export default function Page() {
+  return (
+    <div>
+      <Header />   {/* Server Component */}
+      <Counter />  {/* Client Component - only this ships JS */}
+      <Footer />   {/* Server Component */}
+    </div>
+  );
+}
+```
+
+## Data Fetching Optimization
+
+### Parallel Data Fetching
+
+```typescript
+// ❌ BAD: Sequential (waterfall)
+export default async function Page() {
+  const user = await getUser();      // Wait...
+  const posts = await getPosts();    // Then wait...
+  const comments = await getComments(); // Then wait...
+  return <Dashboard user={user} posts={posts} comments={comments} />;
+}
+
+// ✅ GOOD: Parallel
+export default async function Page() {
+  const [user, posts, comments] = await Promise.all([
+    getUser(),
+    getPosts(),
+    getComments(),
+  ]);
+  return <Dashboard user={user} posts={posts} comments={comments} />;
+}
+```
+
+### Streaming with Suspense
+
+```typescript
+// ✅ Show page immediately, stream slow content
+export default function Page() {
+  return (
+    <div>
+      <Header />  {/* Instant */}
+      
+      <Suspense fallback={<PostsSkeleton />}>
+        <Posts />  {/* Streams when ready */}
+      </Suspense>
+      
+      <Suspense fallback={<CommentsSkeleton />}>
+        <Comments />  {/* Streams independently */}
+      </Suspense>
+    </div>
+  );
+}
+```
+
+### Cache Expensive Operations
+
+```typescript
+import { cache } from 'react';
+import { unstable_cache } from 'next/cache';
+
+// React cache - dedupes within single request
+export const getUser = cache(async (userId: string) => {
+  return await db.users.findUnique({ where: { id: userId } });
+});
+
+// Next.js cache - persists across requests
+export const getProducts = unstable_cache(
+  async () => {
+    return await db.products.findMany();
+  },
+  ['products'],  // Cache key
+  { revalidate: 3600 }  // 1 hour
+);
+```
+
+## Image Optimization
+
+### Always Use next/image
+
+```typescript
+import Image from 'next/image';
+
+// ✅ Optimized, lazy-loaded, properly sized
+<Image
+  src="/hero.jpg"
+  alt="Hero image"
+  width={1200}
+  height={600}
+  priority  // For above-the-fold images
+  placeholder="blur"
+  blurDataURL="data:image/..."  // Or use static import
+/>
+
+// For dynamic/unknown sizes
+<div className="relative h-64 w-full">
+  <Image
+    src={product.image}
+    alt={product.name}
+    fill
+    className="object-cover"
+    sizes="(max-width: 768px) 100vw, 50vw"
+  />
+</div>
+```
+
+## Bundle Optimization
+
+### Dynamic Imports for Heavy Components
+
+```typescript
+import dynamic from 'next/dynamic';
+
+// ❌ BAD: Heavy chart library loaded for everyone
+import { Chart } from 'chart.js';
+
+// ✅ GOOD: Only load when needed
+const Chart = dynamic(() => import('./chart'), {
+  loading: () => <ChartSkeleton />,
+  ssr: false,  // If truly client-only
+});
+```
+
+### Analyze Bundle Size
+
+```bash
+# Add to package.json scripts
+"analyze": "ANALYZE=true next build"
+
+# Install analyzer
+npm install -D @next/bundle-analyzer
+```
+
+```typescript
+// next.config.ts
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+});
+
+module.exports = withBundleAnalyzer(nextConfig);
+```
+
+## React Optimization
+
+### Memoization
+
+```typescript
+import { memo, useMemo, useCallback } from 'react';
+
+// Memoize expensive components
+const ExpensiveList = memo(function ExpensiveList({ items }) {
+  return items.map(item => <ExpensiveItem key={item.id} {...item} />);
+});
+
+// Memoize expensive computations
+function ProductFilter({ products, filter }) {
+  const filtered = useMemo(
+    () => products.filter(p => p.category === filter),
+    [products, filter]
+  );
+  return <ProductList products={filtered} />;
+}
+
+// Stable callbacks for child components
+function Parent() {
+  const [items, setItems] = useState([]);
+  
+  const handleDelete = useCallback((id: string) => {
+    setItems(prev => prev.filter(item => item.id !== id));
+  }, []);
+  
+  return <ItemList items={items} onDelete={handleDelete} />;
+}
+```
+
+### Avoid Layout Shifts
+
+```typescript
+// ❌ BAD: No dimensions, causes layout shift
+<img src={url} alt="Product" />
+
+// ✅ GOOD: Reserve space
+<Image src={url} alt="Product" width={300} height={200} />
+
+// ✅ GOOD: Aspect ratio container
+<div className="aspect-video relative">
+  <Image src={url} alt="Product" fill />
+</div>
+
+// ✅ GOOD: Skeleton with same dimensions
+{isLoading ? (
+  <Skeleton className="h-48 w-full" />
+) : (
+  <ProductCard product={product} />
+)}
+```
+
+## Database Query Optimization
+
+### Select Only What You Need
+
+```typescript
+// ❌ BAD: Fetching everything
+const { data } = await supabase.from('posts').select('*');
+
+// ✅ GOOD: Only needed columns
+const { data } = await supabase
+  .from('posts')
+  .select('id, title, created_at');
+
+// ✅ GOOD: With relationships
+const { data } = await supabase
+  .from('posts')
+  .select('id, title, author:users(name, avatar)');
+```
+
+### Pagination
+
+```typescript
+// ✅ Paginate large datasets
+const PAGE_SIZE = 20;
+
+const { data, count } = await supabase
+  .from('posts')
+  .select('*', { count: 'exact' })
+  .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+  .order('created_at', { ascending: false });
+```
+
+## Performance Monitoring
+
+### Vercel Analytics
+
+```typescript
+// app/layout.tsx
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        {children}
+        <Analytics />
+        <SpeedInsights />
+      </body>
+    </html>
+  );
+}
+```
+
+## Performance Checklist
+
+### Initial Load
+- [ ] Server Components by default
+- [ ] Client Components minimized and pushed down
+- [ ] Above-the-fold images have `priority`
+- [ ] Fonts optimized with `next/font`
+
+### Data
+- [ ] Parallel data fetching where possible
+- [ ] Suspense boundaries for slow data
+- [ ] Appropriate caching strategy
+- [ ] Database queries select only needed fields
+
+### Bundle
+- [ ] Dynamic imports for heavy components
+- [ ] No unused dependencies
+- [ ] Bundle analyzed and optimized
+
+### Runtime
+- [ ] Memoization for expensive operations
+- [ ] No layout shifts (CLS)
+- [ ] Skeleton loaders match content dimensions

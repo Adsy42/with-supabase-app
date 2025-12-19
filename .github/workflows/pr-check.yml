@@ -1,0 +1,102 @@
+name: PR Quality Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  pr-quality:
+    name: PR Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR Description
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+            
+            const errors = [];
+            
+            // Check if description section is filled
+            if (body.includes('<!-- What does this PR do?') || body.length < 50) {
+              errors.push('❌ Please fill in the PR description (at least 50 characters)');
+            }
+            
+            // Check if type is selected
+            if (!body.includes('[x]')) {
+              errors.push('❌ Please select a type of change');
+            }
+            
+            // Check for testing checkboxes
+            const testingSection = body.includes('Tested locally') || 
+                                   body.includes('[x] Tested');
+            
+            if (errors.length > 0) {
+              const message = `## PR Quality Check Failed\n\n${errors.join('\n')}\n\nPlease update your PR to fix these issues.`;
+              
+              // Find existing comment
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+              });
+              
+              const botComment = comments.find(c => 
+                c.user.type === 'Bot' && c.body.includes('PR Quality Check')
+              );
+              
+              if (botComment) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: botComment.id,
+                  body: message,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  body: message,
+                });
+              }
+              
+              core.setFailed('PR quality checks failed');
+            } else {
+              console.log('✅ PR quality checks passed');
+              
+              // Remove any previous failure comment
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+              });
+              
+              const botComment = comments.find(c => 
+                c.user.type === 'Bot' && c.body.includes('PR Quality Check Failed')
+              );
+              
+              if (botComment) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: botComment.id,
+                });
+              }
+            }
+
+  conventional-commits:
+    name: Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check Commit Messages
+        uses: webiny/action-conventional-commits@v1.3.0
+        with:
+          allowed-commit-types: "feat,fix,docs,style,refactor,perf,test,chore,ci,revert"
+

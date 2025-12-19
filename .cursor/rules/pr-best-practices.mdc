@@ -1,0 +1,179 @@
+---
+description: Pull request size, structure, and best practices
+globs: ["**/*"]
+---
+
+# Pull Request Best Practices
+
+## Optimal PR Size
+
+| Size | Lines Changed | Review Quality | Action |
+|------|---------------|----------------|--------|
+| **XS** | < 50 | Excellent | Perfect |
+| **S** | 50-200 | Great | Ideal |
+| **M** | 200-400 | Good | Acceptable |
+| **L** | 400-800 | Declining | Split if possible |
+| **XL** | > 800 | Poor | Must split |
+
+**Target: 200-400 lines maximum.** Research shows review quality drops dramatically after 400 lines.
+
+## PR Structure
+
+### Title Format
+```
+<type>(<scope>): <short description>
+
+Examples:
+feat(auth): add password reset flow
+fix(dashboard): resolve chart rendering issue
+refactor(api): extract validation helpers
+```
+
+### Description Template
+```markdown
+## Summary
+[2-3 sentences on what this PR does and why]
+
+## Changes
+- [Specific change 1]
+- [Specific change 2]
+
+## Testing
+- [ ] Tested locally
+- [ ] Tested on Preview URL
+- [ ] Tested edge cases
+
+## Screenshots
+[Required for UI changes]
+```
+
+## What Makes a Good PR
+
+### DO ✅
+
+- **One logical change per PR**
+  ```
+  ✅ "Add user profile page"
+  ✅ "Fix login redirect bug"
+  ❌ "Add profile page and fix login and update deps"
+  ```
+
+- **Self-review before requesting review**
+  - Read through your own diff
+  - Remove debug code, console.logs
+  - Check for typos in strings/comments
+
+- **Include context**
+  - Link related issues: `Fixes #123`
+  - Explain *why*, not just *what*
+  - Add screenshots for UI changes
+
+- **Keep tests with code**
+  - Test files in same PR as implementation
+  - Don't separate "add feature" and "add tests" PRs
+
+- **Respond promptly to feedback**
+  - Address comments within 24 hours
+  - Explain if you disagree (don't just ignore)
+
+### DON'T ❌
+
+- **Mix unrelated changes**
+  ```
+  ❌ Feature + unrelated refactoring
+  ❌ Bug fix + style changes elsewhere
+  ❌ Multiple independent features
+  ```
+
+- **Leave TODOs for later**
+  ```
+  ❌ // TODO: add error handling
+  ❌ // FIXME: this is a hack
+  ```
+
+- **Submit without testing**
+  - Always test on Preview URL
+  - Check mobile responsiveness
+  - Test error states
+
+- **Force push after review started**
+  - Makes it hard to see what changed
+  - Use regular commits instead
+
+- **Merge with failing CI**
+  - All checks must pass
+  - No exceptions
+
+## Splitting Large PRs
+
+If your PR is too big, split by:
+
+### 1. Layer (Recommended)
+```
+PR 1: Database schema + types
+PR 2: Server Actions
+PR 3: UI components
+PR 4: Page integration
+```
+
+### 2. Feature Slice
+```
+PR 1: Basic CRUD (create, read)
+PR 2: Update functionality
+PR 3: Delete with confirmation
+PR 4: Bulk operations
+```
+
+### 3. Refactor First
+```
+PR 1: Refactor existing code (no behavior change)
+PR 2: Add new feature on clean foundation
+```
+
+## PR Review Turnaround
+
+### As Author
+- Keep PRs small → faster reviews
+- Provide good context → fewer questions
+- Be available for questions
+
+### As Reviewer
+- Review within 24 hours (business hours)
+- Be constructive, not critical
+- Approve when "good enough" (not perfect)
+
+## Automated PR Checks
+
+Your CI runs these automatically:
+- ESLint (code style)
+- TypeScript (type errors)
+- Build (compilation)
+- E2E tests on Preview URL
+
+## AI PR Review Tools
+
+### CodeRabbit (Recommended)
+Install at: `github.com/apps/coderabbitai`
+- Free for open-source repos
+- Automatic AI review on every PR
+- Security vulnerability detection
+- Inline suggestions
+
+### Vercel Agent (if on Pro)
+- Built-in code review
+- Error investigation
+- Performance suggestions
+
+## Quick Checklist Before Requesting Review
+
+```
+□ PR is < 400 lines (or justified if larger)
+□ Title follows conventional format
+□ Description explains what and why
+□ Self-reviewed the diff
+□ No console.log or debug code
+□ All CI checks pass
+□ Tested on Preview URL
+□ Screenshots for UI changes
+□ Linked related issues
+```

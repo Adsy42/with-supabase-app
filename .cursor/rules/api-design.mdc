@@ -1,0 +1,240 @@
+---
+description: API and Server Actions design patterns
+globs: ["app/api/**/*.ts", "actions/**/*.ts", "app/**/actions.ts"]
+---
+
+# API & Server Actions Design
+
+## Prefer Server Actions Over API Routes
+
+For this Next.js project, use **Server Actions** for most data mutations:
+
+```typescript
+// ✅ Preferred: Server Action
+'use server';
+
+export async function createPost(formData: FormData) {
+  const supabase = await createClient();
+  // ... create post
+}
+
+// ❌ Avoid: API Route (unless needed for webhooks/external)
+// app/api/posts/route.ts
+export async function POST(request: Request) {
+  // ...
+}
+```
+
+## When to Use API Routes
+
+| Use Case | Solution |
+|----------|----------|
+| Form submissions | Server Action |
+| Data mutations | Server Action |
+| Webhooks (Stripe, Supabase) | API Route |
+| External API consumers | API Route |
+| File uploads (large) | API Route |
+| Long-running tasks | API Route + Background job |
+
+## Server Action Patterns
+
+### Standard Response Format
+
+```typescript
+type ActionResponse<T = void> = 
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+export async function createPost(formData: FormData): Promise<ActionResponse<Post>> {
+  try {
+    // Validate
+    const title = formData.get('title') as string;
+    if (!title) {
+      return { success: false, error: 'Title is required' };
+    }
+
+    // Auth check
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    // Execute
+    const { data, error } = await supabase
+      .from('posts')
+      .insert({ title, user_id: user.id })
+      .select()
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    // Revalidate cache
+    revalidatePath('/posts');
+    
+    return { success: true, data };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+```
+
+### Input Validation with Zod
+
+```typescript
+import { z } from 'zod';
+
+const CreatePostSchema = z.object({
+  title: z.string().min(1).max(100),
+  content: z.string().min(1).max(10000),
+  published: z.boolean().default(false),
+});
+
+export async function createPost(formData: FormData): Promise<ActionResponse<Post>> {
+  // Parse and validate
+  const parsed = CreatePostSchema.safeParse({
+    title: formData.get('title'),
+    content: formData.get('content'),
+    published: formData.get('published') === 'true',
+  });
+
+  if (!parsed.success) {
+    return { 
+      success: false, 
+      error: parsed.error.issues[0].message 
+    };
+  }
+
+  const { title, content, published } = parsed.data;
+  // ... continue with validated data
+}
+```
+
+### File Organization
+
+```
+actions/
+  auth.ts       # signIn, signOut, signUp
+  posts.ts      # createPost, updatePost, deletePost
+  users.ts      # updateProfile, deleteAccount
+
+# Or colocate with routes:
+app/
+  posts/
+    page.tsx
+    actions.ts  # Actions specific to this route
+```
+
+## API Route Patterns (When Needed)
+
+### Webhook Handler
+
+```typescript
+// app/api/webhooks/stripe/route.ts
+import { headers } from 'next/headers';
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+export async function POST(request: Request) {
+  const body = await request.text();
+  const headersList = await headers();
+  const signature = headersList.get('stripe-signature')!;
+
+  let event: Stripe.Event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    );
+  } catch (err) {
+    return Response.json({ error: 'Invalid signature' }, { status: 400 });
+  }
+
+  switch (event.type) {
+    case 'checkout.session.completed':
+      // Handle successful payment
+      break;
+    default:
+      console.log(`Unhandled event type: ${event.type}`);
+  }
+
+  return Response.json({ received: true });
+}
+```
+
+### REST API (If External Consumers)
+
+```typescript
+// app/api/posts/route.ts
+import { createClient } from '@/lib/supabase/server';
+import { NextRequest } from 'next/server';
+
+// GET /api/posts?page=1&limit=10
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const page = parseInt(searchParams.get('page') || '1');
+  const limit = parseInt(searchParams.get('limit') || '10');
+  const offset = (page - 1) * limit;
+
+  const supabase = await createClient();
+  
+  const { data, error, count } = await supabase
+    .from('posts')
+    .select('*', { count: 'exact' })
+    .range(offset, offset + limit - 1)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+
+  return Response.json({
+    data,
+    pagination: {
+      page,
+      limit,
+      total: count,
+      totalPages: Math.ceil((count || 0) / limit),
+    },
+  });
+}
+```
+
+## Error Handling
+
+### User-Friendly Errors
+
+```typescript
+const ERROR_MESSAGES: Record<string, string> = {
+  '23505': 'This item already exists',
+  '23503': 'Referenced item not found',
+  'PGRST116': 'Item not found',
+};
+
+function getErrorMessage(error: { code?: string; message: string }): string {
+  if (error.code && ERROR_MESSAGES[error.code]) {
+    return ERROR_MESSAGES[error.code];
+  }
+  // Don't expose internal errors to users
+  console.error('Database error:', error);
+  return 'Something went wrong. Please try again.';
+}
+```
+
+## Security Checklist
+
+- [ ] Always check authentication before mutations
+- [ ] Validate all input (use Zod)
+- [ ] Don't trust client-side data
+- [ ] Use parameterized queries (Supabase handles this)
+- [ ] Rate limit public endpoints
+- [ ] Log security-relevant events
+- [ ] Never expose internal error details

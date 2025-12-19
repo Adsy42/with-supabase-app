@@ -1,0 +1,131 @@
+---
+description: Environment configuration and deployment patterns
+globs: ["**/*.ts", "**/*.tsx", ".env*"]
+---
+
+# Environment Rules
+
+## Vercel Deployment Model
+
+Vercel automatically provides three environments:
+
+| Environment | Branch | URL | Use Case |
+|-------------|--------|-----|----------|
+| Development | - | `localhost:3000` | Local coding |
+| Preview | Any PR/branch | `*.vercel.app` | Testing before merge (staging) |
+| Production | `main` | Your domain | Live users |
+
+**Every PR gets a Preview URL** - this is your staging environment. Test there before merging.
+
+## Environment Variables
+
+### Naming Convention
+
+```bash
+# Public (exposed to browser) - prefix with NEXT_PUBLIC_
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+NEXT_PUBLIC_APP_URL=
+
+# Private (server-only) - no prefix
+SUPABASE_SERVICE_ROLE_KEY=
+OPENAI_API_KEY=
+```
+
+### Per-Environment Values
+
+Set different values in Vercel Dashboard → Settings → Environment Variables:
+
+| Variable | Development | Preview | Production |
+|----------|-------------|---------|------------|
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Auto (Vercel URL) | `https://yourdomain.com` |
+| Database | Dev database | Preview/staging DB | Production DB |
+
+## Accessing Environment in Code
+
+```typescript
+// ✅ Check environment
+const isDev = process.env.NODE_ENV === 'development';
+const isProd = process.env.NODE_ENV === 'production';
+const isPreview = process.env.VERCEL_ENV === 'preview';
+
+// ✅ Get the correct app URL
+function getBaseUrl() {
+  if (typeof window !== 'undefined') return ''; // Browser
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`; // Vercel
+  return 'http://localhost:3000'; // Dev
+}
+```
+
+## Vercel System Variables
+
+These are automatically available in Vercel deployments:
+
+| Variable | Example | Description |
+|----------|---------|-------------|
+| `VERCEL_ENV` | `production`, `preview`, `development` | Current environment |
+| `VERCEL_URL` | `my-app-abc123.vercel.app` | Deployment URL (no protocol) |
+| `VERCEL_GIT_COMMIT_SHA` | `abc123...` | Git commit hash |
+| `VERCEL_GIT_COMMIT_REF` | `feat/dashboard` | Branch name |
+
+## Environment-Specific Behavior
+
+```typescript
+// ✅ Conditional features by environment
+const config = {
+  // Only enable in production
+  analytics: process.env.VERCEL_ENV === 'production',
+  
+  // Disable in production
+  debugMode: process.env.VERCEL_ENV !== 'production',
+  
+  // Different API endpoints
+  apiUrl: process.env.VERCEL_ENV === 'production'
+    ? 'https://api.yourdomain.com'
+    : 'https://api-staging.yourdomain.com',
+};
+```
+
+## Database Strategy
+
+### Option 1: Same Database, Different Data (Simple)
+
+Use one Supabase project. RLS handles access control.
+
+### Option 2: Separate Databases (Recommended for serious apps)
+
+| Environment | Supabase Project |
+|-------------|-----------------|
+| Development | `your-app-dev` |
+| Preview | `your-app-staging` |
+| Production | `your-app-prod` |
+
+Set `NEXT_PUBLIC_SUPABASE_URL` per environment in Vercel.
+
+## Local Development
+
+Create `.env.local` (gitignored) for local secrets:
+
+```bash
+# .env.local
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=eyJ...
+```
+
+**Never commit `.env.local`** - it's in `.gitignore` by default.
+
+## Testing Workflow
+
+```
+1. Code locally          → npm run dev (Development)
+2. Push branch           → Vercel creates Preview URL
+3. Test on Preview URL   → Share with co-founder for review
+4. Merge to main         → Auto-deploys to Production
+```
+
+## Protecting Production
+
+- Never use production database credentials locally
+- Test destructive operations on Preview first
+- Use feature flags for gradual rollouts
+- Monitor errors after production deploy

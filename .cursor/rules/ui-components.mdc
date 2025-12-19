@@ -1,0 +1,111 @@
+---
+description: UI component patterns using shadcn/ui and Tailwind
+globs: ["components/**/*.tsx"]
+---
+
+# UI Components Rules
+
+## Component Structure
+
+Follow the shadcn/ui pattern with CVA (class-variance-authority):
+
+```typescript
+import * as React from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '@/lib/utils';
+
+const componentVariants = cva(
+  'base-classes-here',
+  {
+    variants: {
+      variant: {
+        default: 'default-variant-classes',
+        secondary: 'secondary-classes',
+      },
+      size: {
+        default: 'default-size',
+        sm: 'small-size',
+        lg: 'large-size',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
+    },
+  }
+);
+
+export interface ComponentProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof componentVariants> {
+  // additional props
+}
+
+export const Component = React.forwardRef<HTMLDivElement, ComponentProps>(
+  ({ className, variant, size, ...props }, ref) => {
+    return (
+      <div
+        ref={ref}
+        className={cn(componentVariants({ variant, size, className }))}
+        {...props}
+      />
+    );
+  }
+);
+Component.displayName = 'Component';
+```
+
+## Styling Rules
+
+- **Always use `cn()`** from `@/lib/utils` for className merging
+- Tailwind classes only - no inline styles or CSS modules
+- Keep component styles self-contained
+- Use CSS variables for theming (defined in globals.css)
+
+## Accessibility
+
+- Use Radix UI primitives for complex interactive components
+- Ensure proper keyboard navigation
+- Include ARIA attributes where needed
+- Test with screen readers for critical flows
+
+## Props Patterns
+
+- Extend native HTML attributes for flexibility
+- Use `asChild` pattern (via Radix Slot) for composition:
+
+```typescript
+import { Slot } from '@radix-ui/react-slot';
+
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  asChild?: boolean;
+}
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : 'button';
+    return <Comp ref={ref} {...props} />;
+  }
+);
+```
+
+## Refs
+
+- Always forward refs for interactive components
+- Set `displayName` for better debugging
+
+## Component Organization
+
+```
+components/
+  ui/           # Primitive UI components (Button, Input, Card)
+  forms/        # Form-specific components
+  layout/       # Layout components (Header, Footer, Sidebar)
+  features/     # Feature-specific components
+```
+
+## Icons
+
+- Use `lucide-react` for icons (already installed)
+- Wrap icons in semantic elements when needed for accessibility
+- Size icons using Tailwind classes: `className="h-4 w-4"`

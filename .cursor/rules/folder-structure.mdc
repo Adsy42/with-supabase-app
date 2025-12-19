@@ -1,0 +1,137 @@
+---
+description: Recommended folder structure and file organization
+globs: ["**/*"]
+---
+
+# Folder Structure
+
+## Recommended Organization
+
+```
+├── app/                        # Next.js App Router
+│   ├── (auth)/                 # Route group: auth pages (no /auth in URL)
+│   │   ├── login/
+│   │   ├── sign-up/
+│   │   └── ...
+│   ├── (marketing)/            # Route group: public pages
+│   │   ├── page.tsx            # Homepage
+│   │   ├── pricing/
+│   │   └── about/
+│   ├── (dashboard)/            # Route group: authenticated app
+│   │   ├── layout.tsx          # Dashboard layout with nav
+│   │   ├── page.tsx            # Dashboard home
+│   │   └── settings/
+│   ├── api/                    # API routes (if needed)
+│   │   └── webhooks/
+│   ├── layout.tsx              # Root layout
+│   ├── globals.css
+│   └── error.tsx               # Global error boundary
+│
+├── components/
+│   ├── ui/                     # Primitive UI (shadcn/ui)
+│   │   ├── button.tsx
+│   │   ├── input.tsx
+│   │   └── ...
+│   ├── forms/                  # Form components
+│   │   ├── login-form.tsx
+│   │   └── sign-up-form.tsx
+│   ├── layout/                 # Layout components
+│   │   ├── header.tsx
+│   │   ├── footer.tsx
+│   │   └── sidebar.tsx
+│   └── [feature]/              # Feature-specific components
+│       └── feature-card.tsx
+│
+├── lib/                        # Shared utilities
+│   ├── supabase/
+│   │   ├── client.ts           # Browser client
+│   │   ├── server.ts           # Server client
+│   │   └── middleware.ts       # Auth middleware helpers
+│   ├── utils.ts                # General utilities (cn, etc.)
+│   └── constants.ts            # App-wide constants
+│
+├── actions/                    # Server Actions (mutations)
+│   ├── auth.ts                 # Auth actions
+│   ├── posts.ts                # Post CRUD actions
+│   └── ...
+│
+├── hooks/                      # Custom React hooks
+│   ├── use-user.ts
+│   └── use-realtime.ts
+│
+├── types/                      # Shared TypeScript types
+│   ├── database.types.ts       # Generated Supabase types
+│   └── index.ts                # App-specific types
+│
+├── config/                     # App configuration
+│   ├── site.ts                 # Site metadata
+│   └── nav.ts                  # Navigation config
+│
+├── .cursor/
+│   └── rules/                  # AI coding rules
+│
+├── .github/
+│   ├── workflows/
+│   │   └── ci.yml
+│   └── pull_request_template.md
+│
+└── docs/                       # Project documentation
+    ├── CHANGELOG.md            # Auto-generated from commits
+    └── decisions/              # Architecture Decision Records
+        └── 001-auth-strategy.md
+```
+
+## File Naming Conventions
+
+| Type | Convention | Example |
+|------|------------|---------|
+| Components | kebab-case | `user-profile.tsx` |
+| Pages | kebab-case folders | `app/user-settings/page.tsx` |
+| Hooks | use- prefix | `use-auth.ts` |
+| Actions | noun.ts | `posts.ts`, `auth.ts` |
+| Types | .types.ts suffix | `database.types.ts` |
+| Utils | descriptive | `format-date.ts` |
+
+## Route Groups
+
+Use `(groupName)` folders to organize without affecting URLs:
+
+```
+app/
+  (auth)/login/page.tsx      → /login (not /auth/login)
+  (dashboard)/home/page.tsx  → /home (not /dashboard/home)
+```
+
+## Colocating Related Files
+
+Keep related files together:
+
+```
+app/posts/
+  page.tsx           # UI
+  loading.tsx        # Loading state
+  error.tsx          # Error boundary
+  actions.ts         # Server Actions for this route
+  _components/       # Route-specific components (underscore = not a route)
+    post-card.tsx
+```
+
+## When to Create New Folders
+
+- **3+ related files** → Create a folder
+- **Reused across routes** → Move to `/components`
+- **Shared logic** → Move to `/lib` or `/hooks`
+- **Database mutations** → Move to `/actions`
+
+## Import Aliases
+
+Use `@/` for clean imports:
+
+```typescript
+// ✅ Clean
+import { Button } from '@/components/ui/button';
+import { createClient } from '@/lib/supabase/server';
+
+// ❌ Messy
+import { Button } from '../../../components/ui/button';
+```

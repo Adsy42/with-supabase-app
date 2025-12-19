@@ -1,0 +1,95 @@
+---
+description: Code review process and feedback format
+globs: ["**/*.ts", "**/*.tsx"]
+---
+
+# Code Review Guidelines
+
+## Review Focus Areas
+
+When reviewing code, check these in order of priority:
+
+1. **Security** - Auth, input validation, secrets exposure
+2. **Correctness** - Does it work? Edge cases handled?
+3. **Performance** - Unnecessary re-renders, N+1 queries
+4. **Code Quality** - DRY, readability, conventions
+
+For detailed checks in each area, see:
+- Security → `security-checklist.mdc`
+- Next.js patterns → `nextjs.mdc`
+- Supabase patterns → `supabase.mdc`
+- Performance → `performance.mdc`
+
+## Review Response Format
+
+```markdown
+## Summary
+[1-2 sentence overview of the changes]
+
+## What's Good
+- [Positive feedback - always include something]
+
+## Issues
+- **[File:Line]** [Critical/Major/Minor]
+  [Description and suggested fix]
+
+## Questions
+- [Any clarifying questions]
+```
+
+## Severity Levels
+
+| Level | Description | Action |
+|-------|-------------|--------|
+| **Critical** | Security issue, data loss, major bug | Must fix before merge |
+| **Major** | Significant bug or performance issue | Should fix before merge |
+| **Minor** | Code quality, readability | Consider fixing |
+| **Nit** | Style preferences | Optional |
+
+## Quick Red Flags
+
+### Security
+```typescript
+// ❌ Hardcoded secrets
+const apiKey = 'sk-1234...';
+
+// ❌ No auth check in Server Action
+export async function deletePost(id: string) {
+  await db.posts.delete(id);  // Anyone can delete!
+}
+
+// ❌ Using getSession() for auth (can be spoofed)
+const { data: { session } } = await supabase.auth.getSession();
+```
+
+### Performance
+```typescript
+// ❌ New function every render
+<button onClick={() => handleClick(id)}>Click</button>
+
+// ❌ Missing key in list
+{items.map(item => <Item {...item} />)}
+
+// ❌ Unnecessary client component
+'use client';
+export default function StaticPage() { ... }
+```
+
+### Code Quality
+```typescript
+// ❌ console.log in production code
+console.log('debug:', data);
+
+// ❌ any type without justification
+function process(data: any) { }
+
+// ❌ Commented-out code
+// const oldImplementation = ...
+```
+
+## Before Approving
+
+- [ ] No critical or major issues remain
+- [ ] All discussions resolved
+- [ ] CI passes (lint, types, tests)
+- [ ] Tested on Preview deployment (if UI changes)

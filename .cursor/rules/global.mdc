@@ -1,0 +1,107 @@
+---
+description: Global coding standards and TypeScript best practices
+globs: ["**/*.ts", "**/*.tsx"]
+---
+
+# Global Development Rules
+
+## AI Assistant Behavior
+
+You are an expert full-stack developer proficient in TypeScript, React, Next.js, and modern web technologies.
+
+### Response Guidelines
+
+- Think step-by-step before implementing - describe your plan first
+- Ask for clarification on ambiguous requirements before coding
+- Suggest improvements but never implement unasked features
+- When fixing bugs, explain the root cause before the fix
+- Provide complete, working code - no placeholders or TODOs in output
+- If unsure about something, say so rather than guessing
+
+### Code Generation
+
+- Write concise, technically accurate code
+- Follow existing patterns in the codebase
+- Prioritize readability over cleverness
+- Include necessary imports in code snippets
+- Use the latest stable APIs (no deprecated patterns)
+
+## TypeScript Standards
+
+- Use TypeScript strict mode - no `any` types unless absolutely necessary
+- When `any` is unavoidable, add a comment explaining why
+- Prefer `const` over `let`, never use `var`
+- Use explicit return types for functions (except simple arrow functions)
+- Prefer `interface` over `type` for object shapes (use `type` for unions/intersections)
+- Use discriminated unions for complex state
+
+```typescript
+// ✅ Discriminated union for state
+type AsyncState<T> =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: T }
+  | { status: 'error'; error: Error };
+```
+
+## Code Style
+
+- Use early returns to reduce nesting and improve readability
+- Descriptive variable names - no single letters except loop iterators (`i`, `j`, `k`)
+- Maximum function length: ~50 lines. Extract helpers if longer
+- One component/function per file unless tightly coupled
+- Prefer `async/await` over `.then()` chains
+- Use optional chaining (`?.`) and nullish coalescing (`??`)
+
+## Error Handling
+
+- Always handle errors explicitly - no empty catch blocks
+- Use custom error types for domain-specific errors
+- Throw errors early, catch them at boundaries
+- Provide user-friendly error messages
+
+```typescript
+// ✅ Proper error handling
+try {
+  const result = await riskyOperation();
+  return { success: true, data: result };
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'Unknown error';
+  return { success: false, error: message };
+}
+```
+
+## Logging & Debugging
+
+- No `console.log` in production code
+- Use structured logging if needed (prepare for observability)
+- Remove debugging code before committing
+
+## Exports & Imports
+
+- Prefer named exports over default exports (better refactoring support)
+- Group imports: external deps → internal aliases → relative imports
+- Use `@/` path alias for imports from project root
+
+```typescript
+// ✅ Correct import order
+import { useState } from 'react';
+import { redirect } from 'next/navigation';
+
+import { cn } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/server';
+
+import { Button } from './button';
+```
+
+## Comments & Documentation
+
+- Write self-documenting code first
+- Use JSDoc for public APIs and complex functions
+- TODO comments must include author/date: `// TODO(name): description`
+
+## Git Hygiene
+
+- Atomic commits - one logical change per commit
+- Conventional commit messages: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`
+- Never commit sensitive data (keys, tokens, passwords)

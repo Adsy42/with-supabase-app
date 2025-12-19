@@ -1,0 +1,258 @@
+---
+description: Security best practices and checklist
+globs: ["**/*.ts", "**/*.tsx"]
+---
+
+# Security Checklist
+
+## Authentication & Authorization
+
+### Always Verify Auth Server-Side
+
+```typescript
+// ❌ BAD: Only checking session (can be spoofed)
+const { data: { session } } = await supabase.auth.getSession();
+if (session) { /* do protected thing */ }
+
+// ✅ GOOD: Verify with auth server
+const { data: { user }, error } = await supabase.auth.getUser();
+if (!user) {
+  redirect('/login');
+}
+```
+
+### Check Ownership Before Actions
+
+```typescript
+// ❌ BAD: No ownership check
+export async function deletePost(postId: string) {
+  await supabase.from('posts').delete().eq('id', postId);
+}
+
+// ✅ GOOD: Verify user owns resource
+export async function deletePost(postId: string) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+  
+  // RLS handles this, but defense in depth
+  const { data: post } = await supabase
+    .from('posts')
+    .select('user_id')
+    .eq('id', postId)
+    .single();
+    
+  if (post?.user_id !== user.id) {
+    throw new Error('Forbidden');
+  }
+  
+  await supabase.from('posts').delete().eq('id', postId);
+}
+```
+
+## Input Validation
+
+### Validate All User Input
+
+```typescript
+import { z } from 'zod';
+
+// Define strict schemas
+const CreateUserSchema = z.object({
+  email: z.string().email().max(255),
+  name: z.string().min(1).max(100).regex(/^[a-zA-Z\s]+$/),
+  age: z.number().int().min(13).max(120).optional(),
+});
+
+// Validate before use
+export async function createUser(formData: FormData) {
+  const parsed = CreateUserSchema.safeParse({
+    email: formData.get('email'),
+    name: formData.get('name'),
+    age: formData.get('age') ? Number(formData.get('age')) : undefined,
+  });
+
+  if (!parsed.success) {
+    return { error: 'Invalid input', details: parsed.error.flatten() };
+  }
+
+  // Use parsed.data (validated and typed)
+}
+```
+
+### Sanitize for Display
+
+```typescript
+// React automatically escapes JSX - this is safe:
+<div>{userInput}</div>
+
+// ❌ DANGER: dangerouslySetInnerHTML
+<div dangerouslySetInnerHTML={{ __html: userInput }} />  // XSS risk!
+
+// If you must render HTML, sanitize first:
+import DOMPurify from 'dompurify';
+<div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(userInput) }} />
+```
+
+## Secrets Management
+
+### Environment Variables
+
+```bash
+# ✅ Server-only secrets (no NEXT_PUBLIC_ prefix)
+DATABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+STRIPE_SECRET_KEY=
+
+# ✅ Client-safe values (public by design)
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+NEXT_PUBLIC_APP_URL=
+```
+
+### Never Expose Secrets
+
+```typescript
+// ❌ BAD: Secret in client component
+'use client';
+const apiKey = process.env.STRIPE_SECRET_KEY;  // undefined in browser, but don't try
+
+// ❌ BAD: Returning secrets from API
+export async function GET() {
+  return Response.json({ 
+    key: process.env.SECRET_KEY  // Exposed to client!
+  });
+}
+
+// ✅ GOOD: Use secrets only server-side
+export async function processPayment() {
+  'use server';
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+  // ... use stripe server-side only
+}
+```
+
+## Database Security
+
+### Rely on Row Level Security (RLS)
+
+```sql
+-- Enable RLS on all tables
+ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
+
+-- Users can only see their own posts
+CREATE POLICY "Users can view own posts"
+ON posts FOR SELECT
+USING (auth.uid() = user_id);
+
+-- Users can only modify their own posts
+CREATE POLICY "Users can modify own posts"
+ON posts FOR ALL
+USING (auth.uid() = user_id);
+```
+
+### Never Use Service Role on Client
+
+```typescript
+// ❌ NEVER: Service role key in client code
+const supabase = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+// ✅ CORRECT: Anon key for client, service role only in secure server contexts
+// Client: uses NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+// Server webhooks/admin: can use SERVICE_ROLE_KEY
+```
+
+## API Security
+
+### Rate Limiting
+
+```typescript
+// Implement rate limiting for public endpoints
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(10, '10 s'),
+});
+
+export async function POST(request: Request) {
+  const ip = request.headers.get('x-forwarded-for') ?? '127.0.0.1';
+  const { success } = await ratelimit.limit(ip);
+  
+  if (!success) {
+    return Response.json({ error: 'Too many requests' }, { status: 429 });
+  }
+  
+  // ... handle request
+}
+```
+
+### CORS Configuration
+
+```typescript
+// next.config.ts - Only if you need CORS
+const nextConfig = {
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: 'https://yourdomain.com' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, OPTIONS' },
+        ],
+      },
+    ];
+  },
+};
+```
+
+## Security Headers
+
+```typescript
+// next.config.ts
+const securityHeaders = [
+  { key: 'X-DNS-Prefetch-Control', value: 'on' },
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
+];
+
+const nextConfig = {
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders }];
+  },
+};
+```
+
+## Pre-Deploy Security Checklist
+
+### Authentication
+- [ ] All protected routes check auth server-side
+- [ ] Using `getUser()` not just `getSession()`
+- [ ] Session refresh in middleware
+- [ ] Logout properly clears session
+
+### Authorization
+- [ ] RLS enabled on all Supabase tables
+- [ ] RLS policies tested
+- [ ] Server Actions verify ownership
+- [ ] No privilege escalation possible
+
+### Data
+- [ ] All input validated with Zod
+- [ ] No raw SQL queries (use Supabase client)
+- [ ] Sensitive data not logged
+- [ ] Error messages don't leak internal details
+
+### Secrets
+- [ ] No secrets in client code
+- [ ] No secrets in git (check .gitignore)
+- [ ] Environment variables set in Vercel
+- [ ] Service role key only used server-side
+
+### Infrastructure
+- [ ] HTTPS enforced (Vercel does this)
+- [ ] Security headers configured
+- [ ] Dependencies up to date
+- [ ] No known vulnerabilities (`npm audit`)

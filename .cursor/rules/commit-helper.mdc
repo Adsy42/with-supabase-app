@@ -1,0 +1,204 @@
+---
+description: Git commit message and branch naming guidelines
+globs: ["**/*"]
+---
+
+# Git Conventions
+
+## Branch Naming
+
+### Format
+
+```
+<type>/<short-description>
+```
+
+### Rules
+
+- Use the same types as commit messages
+- Use lowercase letters, numbers, and hyphens only
+- Keep it short but descriptive (max ~50 chars)
+- No spaces, underscores, or special characters
+
+### Examples
+
+```bash
+✅ feat/user-profile-page
+✅ fix/login-redirect-loop
+✅ chore/update-dependencies
+✅ refactor/auth-helpers
+✅ docs/api-documentation
+
+❌ feature/User_Profile     # Wrong type, underscore, uppercase
+❌ add-login-page           # Missing type prefix
+❌ feat/add_new_feature     # Underscore not allowed
+❌ FEAT/something           # Uppercase not allowed
+```
+
+### Allowed Types
+
+| Type | Use For |
+|------|---------|
+| `feat` | New features |
+| `fix` | Bug fixes |
+| `docs` | Documentation |
+| `style` | Formatting changes |
+| `refactor` | Code restructuring |
+| `perf` | Performance improvements |
+| `test` | Adding/updating tests |
+| `chore` | Maintenance, deps |
+| `ci` | CI/CD changes |
+| `revert` | Reverting changes |
+
+### Special Branches
+
+These branches are exempt from naming rules:
+- `main` - Production branch
+- `develop` - Development branch (if used)
+- `release/*` - Release branches
+- `hotfix/*` - Emergency fixes
+
+---
+
+# Commit Message Guidelines
+
+## Format
+
+```
+<type>(<scope>): <subject>
+
+[optional body]
+
+[optional footer]
+```
+
+## Types
+
+| Type | When to Use | Example |
+|------|-------------|---------|
+| `feat` | New feature | `feat(auth): add password reset flow` |
+| `fix` | Bug fix | `fix(login): resolve redirect loop` |
+| `docs` | Documentation only | `docs: update API documentation` |
+| `style` | Formatting, no code change | `style: format with prettier` |
+| `refactor` | Code change, no new feature/fix | `refactor(api): extract validation logic` |
+| `perf` | Performance improvement | `perf(db): add index for user queries` |
+| `test` | Adding/updating tests | `test(auth): add login integration tests` |
+| `chore` | Maintenance, deps, CI | `chore(deps): update next to 15.1` |
+| `ci` | CI/CD changes | `ci: add e2e tests to workflow` |
+| `revert` | Reverting previous commit | `revert: feat(auth): add oauth` |
+
+## Scope (Optional)
+
+Common scopes for this project:
+
+| Scope | Description |
+|-------|-------------|
+| `auth` | Authentication related |
+| `api` | API routes, Server Actions |
+| `ui` | UI components |
+| `db` | Database, Supabase |
+| `deps` | Dependencies |
+| `config` | Configuration files |
+
+## Subject Rules
+
+- Use imperative mood: "add" not "added" or "adds"
+- No capitalization at start
+- No period at end
+- Max 50 characters
+- Complete the sentence: "This commit will..."
+
+```
+✅ "add user profile page"
+✅ "fix login redirect loop"
+✅ "update dependencies"
+
+❌ "Added user profile page"
+❌ "Fix login redirect loop."
+❌ "This commit adds a user profile page"
+```
+
+## Body (Optional)
+
+Use when the subject isn't enough:
+
+```
+fix(auth): resolve session expiry race condition
+
+The session was being checked before the refresh completed,
+causing intermittent logouts. Added await to ensure refresh
+completes before checking session validity.
+
+Fixes #123
+```
+
+## Footer (Optional)
+
+Reference issues or breaking changes:
+
+```
+feat(api): change response format for posts endpoint
+
+BREAKING CHANGE: Posts now return `createdAt` instead of `created_at`
+
+Fixes #456
+Closes #789
+```
+
+## Quick Examples
+
+### Simple feature
+```
+feat(ui): add dark mode toggle to header
+```
+
+### Bug fix with context
+```
+fix(auth): handle expired refresh tokens gracefully
+
+Previously threw unhandled error when refresh token expired.
+Now redirects to login with appropriate message.
+```
+
+### Breaking change
+```
+feat(api)!: require authentication for all endpoints
+
+BREAKING CHANGE: All API routes now require valid session.
+Public routes moved to /api/public/*
+```
+
+### Multiple related changes
+```
+refactor(components): reorganize ui folder structure
+
+- Move primitive components to ui/primitives/
+- Group form components in ui/forms/
+- Add barrel exports for cleaner imports
+```
+
+## Commit Workflow
+
+1. **Stage related changes only**
+   ```bash
+   git add app/auth/login/page.tsx components/login-form.tsx
+   ```
+
+2. **Write descriptive commit**
+   ```bash
+   git commit -m "feat(auth): add login page with form validation"
+   ```
+
+3. **One logical change per commit**
+   - Don't mix features with refactoring
+   - Don't mix unrelated fixes
+
+## AI Assistance
+
+When asking for help writing commits:
+
+> "Generate a commit message for these changes: [describe changes]"
+
+Or:
+
+> "Review my commit message: `feat: add thing` - is this good?"

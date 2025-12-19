@@ -1,0 +1,61 @@
+name: Branch Name Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  branch-name:
+    name: Validate Branch Name
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch name
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.payload.pull_request.head.ref;
+            
+            // Allowed patterns
+            const validPattern = /^(main|develop|release\/[a-z0-9.-]+|hotfix\/[a-z0-9.-]+|(feat|fix|docs|style|refactor|perf|test|chore|ci|revert)\/[a-z0-9-]+)$/;
+            
+            if (!validPattern.test(branch)) {
+              const message = `## ❌ Invalid Branch Name
+            
+            Branch \`${branch}\` doesn't follow our naming convention.
+            
+            ### Required Format
+            \`\`\`
+            <type>/<description>
+            \`\`\`
+            
+            ### Valid Types
+            \`feat\`, \`fix\`, \`docs\`, \`style\`, \`refactor\`, \`perf\`, \`test\`, \`chore\`, \`ci\`, \`revert\`
+            
+            ### Rules
+            - Description must be lowercase
+            - Use hyphens to separate words
+            - No underscores or special characters
+            
+            ### Examples
+            - \`feat/user-profile\`
+            - \`fix/login-redirect\`
+            - \`chore/update-deps\`
+            
+            ### To Fix
+            1. Close this PR
+            2. Rename your branch: \`git branch -m ${branch} <new-name>\`
+            3. Push the renamed branch: \`git push origin -u <new-name>\`
+            4. Open a new PR`;
+              
+              core.setFailed(message);
+              
+              // Also comment on the PR
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: message
+              });
+            } else {
+              console.log(`✅ Branch name '${branch}' is valid`);
+            }

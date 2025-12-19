@@ -1,0 +1,271 @@
+---
+description: AI-assisted development workflow and MCP server usage
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# AI-Assisted Development Workflow
+
+## MCP Servers Available
+
+When configured in `~/.cursor/mcp.json`, these tools are available:
+
+### Supabase MCP
+Query your database schema, tables, and RLS policies directly.
+
+```
+Use Supabase MCP to:
+- "Show me the schema for the posts table"
+- "What RLS policies exist on users table?"
+- "List all tables in my database"
+- "Generate types for my Supabase tables"
+```
+
+### GitHub MCP (if configured)
+Interact with your repository.
+
+```
+Use GitHub MCP to:
+- "Create a new issue for this bug"
+- "List open PRs"
+- "Get the diff for PR #123"
+```
+
+### Vercel MCP (if configured)
+Manage deployments and check logs.
+
+```
+Use Vercel MCP to:
+- "Show recent deployments"
+- "Check deployment logs for errors"
+- "List environment variables"
+```
+
+---
+
+## Structured Development Workflow
+
+### Phase 1: Planning (Before Coding)
+
+```
+□ 1. Define the feature/task clearly
+     "I want to add user profile editing"
+
+□ 2. Ask AI to help plan
+     "Help me plan implementing user profile editing. 
+      What components, actions, and database changes do I need?"
+
+□ 3. Review the plan, ask clarifying questions
+     "What about validation? How should we handle image uploads?"
+
+□ 4. Confirm scope before starting
+     "Let's start with just name and bio, no image upload yet"
+```
+
+### Phase 2: Implementation (Coding)
+
+```
+□ 1. Work in small, focused chunks
+     - One component at a time
+     - One action at a time
+     - Commit after each working piece
+
+□ 2. Use AI effectively:
+     - Share relevant context (current file, related files)
+     - Be specific: "Add form validation using Zod" not "make it better"
+     - Review AI suggestions before accepting
+
+□ 3. Follow the rules:
+     - Check nextjs.mdc for patterns
+     - Check supabase.mdc for database code
+     - Check security-checklist.mdc for auth code
+
+□ 4. Test as you go:
+     - Manual test in browser
+     - Check both light/dark mode
+     - Test error states
+```
+
+### Phase 3: Review (Before PR)
+
+```
+□ 1. Self-review checklist:
+     npm run lint        # No ESLint errors
+     npm run build       # No TypeScript errors
+     npm run typecheck   # Types are correct
+
+□ 2. Ask AI for code review:
+     "Review this code for security issues"
+     "Check this component for performance problems"
+     "Does this follow our project conventions?"
+
+□ 3. Check the Preview deployment:
+     - All features work
+     - No console errors
+     - Responsive on mobile
+
+□ 4. Write good commit messages:
+     feat(profile): add user profile editing
+```
+
+### Phase 4: PR & Merge
+
+```
+□ 1. Create PR with good description
+     - What changed
+     - How to test
+     - Screenshots if UI
+
+□ 2. Address review feedback
+
+□ 3. Merge when CI passes
+```
+
+---
+
+## Effective AI Prompting
+
+### Be Specific
+
+```
+❌ "Fix this"
+❌ "Make it better"
+❌ "Add authentication"
+
+✅ "Fix the TypeScript error on line 23"
+✅ "Optimize this useEffect to prevent re-renders when userId changes"
+✅ "Add Supabase auth check to this Server Action using getUser()"
+```
+
+### Provide Context
+
+```
+❌ "Create a form"
+
+✅ "Create a form for editing user profiles.
+    - Use our existing Input and Button components from @/components/ui
+    - Use Zod for validation (name required, bio max 500 chars)
+    - Submit via Server Action to actions/users.ts
+    - Follow the patterns in our api-design.mdc rules"
+```
+
+### Ask for Explanations
+
+```
+✅ "Explain why this pattern is better before implementing"
+✅ "What are the tradeoffs of this approach?"
+✅ "Show me the alternative ways to do this"
+```
+
+### Iterate
+
+```
+1. Start with a rough implementation
+2. "Now add error handling"
+3. "Now add loading states"
+4. "Now optimize for performance"
+```
+
+---
+
+## Quick Commands for AI
+
+### Starting a Feature
+```
+"Help me plan [feature]. What files need to change?"
+```
+
+### Creating Components
+```
+"Create a [ComponentName] component following our ui-components.mdc patterns.
+ It should [description]. Use shadcn/ui primitives."
+```
+
+### Creating Server Actions
+```
+"Create a Server Action for [action] following our api-design.mdc patterns.
+ Include Zod validation and proper auth checks."
+```
+
+### Database Operations
+```
+"Query the database for [data] following our supabase.mdc patterns.
+ [Use Supabase MCP to check the schema first]"
+```
+
+### Code Review
+```
+"Review this code against our rules. Check for:
+ - Security issues (security-checklist.mdc)
+ - Performance problems (performance.mdc)
+ - Convention violations (nextjs.mdc, supabase.mdc)"
+```
+
+### Debugging
+```
+"Debug this issue. The error is [error message].
+ Here's the relevant code: [code]
+ What I expected: [expected behavior]
+ What happened: [actual behavior]"
+```
+
+### Refactoring
+```
+"Refactor this code to [goal] without changing behavior.
+ Keep all existing tests passing."
+```
+
+---
+
+## Daily Workflow Checklist
+
+### Starting Work
+```
+□ Pull latest from main
+□ Check any open PRs needing review
+□ Pick a task from the backlog
+□ Create a feature branch: git checkout -b feat/[name]
+```
+
+### During Work
+```
+□ Work in small chunks (< 1 hour per commit)
+□ Commit often with conventional messages
+□ Push regularly for backup
+□ Test in browser frequently
+```
+
+### Ending Work
+```
+□ Commit any work in progress
+□ Push to remote
+□ Create PR if feature is complete
+□ Update task status
+```
+
+---
+
+## When AI Can't Help
+
+Some things still need human judgment:
+
+- **Product decisions** - What features to build
+- **UX decisions** - How things should feel
+- **Architecture** - Major structural choices
+- **Security review** - Final sign-off on auth flows
+- **Production debugging** - Real user issues with context
+
+---
+
+## Rules Quick Reference
+
+| Rule File | When to Reference |
+|-----------|-------------------|
+| `nextjs.mdc` | Any App Router code |
+| `supabase.mdc` | Database, auth code |
+| `api-design.mdc` | Server Actions, APIs |
+| `ui-components.mdc` | UI components |
+| `security-checklist.mdc` | Auth, sensitive data |
+| `performance.mdc` | Optimization |
+| `commit-helper.mdc` | Writing commits |
+| `tdd-workflow.mdc` | Writing tests |
