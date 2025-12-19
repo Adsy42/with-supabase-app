@@ -12,6 +12,12 @@ export default defineConfig({
     baseURL: process.env.BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // Bypass Vercel deployment protection in CI
+    extraHTTPHeaders: process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+      ? {
+          'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+        }
+      : undefined,
   },
 
   projects: [
@@ -30,4 +36,3 @@ export default defineConfig({
         reuseExistingServer: !process.env.CI,
       },
 });
-

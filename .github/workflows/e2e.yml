@@ -31,6 +31,7 @@ jobs:
         env:
           BASE_URL: ${{ github.event.deployment_status.target_url }}
           CI: true
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
