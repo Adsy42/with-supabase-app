@@ -48,3 +48,4 @@ export async function embedChunks(chunks: Chunk[]): Promise<EmbeddedChunk[]> {
 export function isIsaacusConfigured(): boolean {
   return !!process.env.ISAACUS_API_KEY;
 }
+

@@ -206,3 +206,4 @@ export type GenericFields = z.infer<typeof GenericFieldsSchema>;
  * Union of all field types
  */
 export type ExtractedFields = ContractFields | LitigationFields | GenericFields;
+

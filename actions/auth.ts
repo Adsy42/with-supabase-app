@@ -117,3 +117,4 @@ export async function updateOrganization(formData: FormData): Promise<void> {
 
   revalidatePath("/settings");
 }
+

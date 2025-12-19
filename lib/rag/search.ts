@@ -135,3 +135,4 @@ export function buildContext(searchContext: SearchContext): string {
 
   return `## Relevant Document Excerpts\n\n${searchContext.documents.join("\n\n---\n\n")}`;
 }
+

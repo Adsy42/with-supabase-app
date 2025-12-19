@@ -130,3 +130,4 @@ export default async function DocumentsPage({ params }: DocumentsPageProps) {
     </div>
   );
 }
+

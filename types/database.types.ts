@@ -434,3 +434,4 @@ export type MatterStatus = Matter["status"];
 export type ProcessingStatus = Document["processing_status"];
 export type MessageRole = Message["role"];
 export type DraftType = Draft["draft_type"];
+

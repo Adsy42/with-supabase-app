@@ -179,3 +179,4 @@ export const extractAnswer = (question: string, context: string) =>
   isaacus.extractAnswer(question, context);
 export const classify = (text: string, labels: string[]) =>
   isaacus.classify(text, labels);
+

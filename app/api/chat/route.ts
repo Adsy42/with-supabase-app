@@ -111,3 +111,4 @@ export async function POST(req: NextRequest) {
   // Return UI message stream response (AI SDK v5)
   return result.toUIMessageStreamResponse();
 }
+

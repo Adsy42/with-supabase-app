@@ -292,3 +292,4 @@ export function DocumentUpload({ matterId }: DocumentUploadProps) {
     </div>
   );
 }
+

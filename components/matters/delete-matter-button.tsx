@@ -61,3 +61,4 @@ export function DeleteMatterButton({ matterId }: DeleteMatterButtonProps) {
     </Dialog>
   );
 }
+

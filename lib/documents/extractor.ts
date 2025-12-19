@@ -180,3 +180,4 @@ function extractGoverningLaw(text: string): string | undefined {
 export function isExtractionAvailable(): boolean {
   return !!process.env.ISAACUS_API_KEY;
 }
+
