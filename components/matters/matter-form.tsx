@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { createMatter, updateMatter } from "@/actions/matters";
@@ -45,12 +46,18 @@ function SubmitButton({ isEdit }: { isEdit: boolean }) {
 
 export function MatterForm({ matter }: MatterFormProps) {
   const isEdit = !!matter;
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (formData: FormData) => {
-    if (isEdit && matter) {
-      await updateMatter(matter.id, formData);
-    } else {
-      await createMatter(formData);
+    setError(null);
+    
+    const result = isEdit && matter
+      ? await updateMatter(matter.id, formData)
+      : await createMatter(formData);
+    
+    // If we get here without redirect, there was an error
+    if (!result.success) {
+      setError(result.error);
     }
   };
 
@@ -145,6 +152,12 @@ export function MatterForm({ matter }: MatterFormProps) {
               defaultValue={matter?.description || ""}
             />
           </div>
+
+          {error && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
 
           <div className="flex justify-end gap-4">
             <Button type="button" variant="outline" asChild>
