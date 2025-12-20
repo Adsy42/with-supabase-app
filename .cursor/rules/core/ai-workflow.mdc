@@ -76,9 +76,9 @@ Use Vercel MCP to:
      - Review AI suggestions before accepting
 
 □ 3. Follow the rules:
-     - Check nextjs.mdc for patterns
-     - Check supabase.mdc for database code
-     - Check security-checklist.mdc for auth code
+     - Check nextjs/ folder for patterns
+     - Check supabase/ folder for database code
+     - Check core/security-checklist.mdc for auth code
 
 □ 4. Test as you go:
      - Manual test in browser
@@ -259,13 +259,19 @@ Some things still need human judgment:
 
 ## Rules Quick Reference
 
-| Rule File | When to Reference |
-|-----------|-------------------|
-| `nextjs.mdc` | Any App Router code |
-| `supabase.mdc` | Database, auth code |
-| `api-design.mdc` | Server Actions, APIs |
-| `ui-components.mdc` | UI components |
-| `security-checklist.mdc` | Auth, sensitive data |
-| `performance.mdc` | Optimization |
-| `commit-helper.mdc` | Writing commits |
-| `tdd-workflow.mdc` | Writing tests |
+| Folder | Rule File | When to Reference |
+|--------|-----------|-------------------|
+| `core/` | `global.mdc` | TypeScript standards |
+| `core/` | `security-checklist.mdc` | Auth, validation, secrets |
+| `nextjs/` | `nextjs-app-router.mdc` | App Router fundamentals |
+| `nextjs/` | `nextjs-advanced-routing.mdc` | Server Actions, Route Handlers |
+| `nextjs/` | `nextjs.server-client.mdc` | Server vs Client Components |
+| `supabase/` | `supabase-nextjs.mdc` | Supabase Auth SSR |
+| `supabase/` | `supabase-database.mdc` | Migrations, Functions, SQL |
+| `supabase/` | `supabase-rls-policies.mdc` | Row Level Security |
+| `workflow/` | `api-design.mdc` | Server Actions, APIs |
+| `ui/` | `ui-components.mdc` | shadcn/ui, Tailwind, a11y |
+| `ui/` | `performance.mdc` | Optimization |
+| `workflow/` | `commit-helper.mdc` | Git conventions |
+| `workflow/` | `tdd-workflow.mdc` | Testing |
+| `integrations/` | `vercel-ai-sdk.mdc` | AI SDK v5 patterns |

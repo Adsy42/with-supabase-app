@@ -1,0 +1,733 @@
+---
+description: Framer Motion animation patterns for premium legal tech UI - Reusable variants, scroll animations, micro-interactions
+globs: ["**/*.tsx"]
+---
+
+# Framer Motion Patterns
+
+Animation patterns for Orderly legal tech platform. Smooth, professional, and performant.
+
+---
+
+## Installation
+
+```bash
+npm install framer-motion
+```
+
+---
+
+## Core Animation Variants
+
+Create a shared variants file for consistency across the app.
+
+```typescript
+// lib/motion-variants.ts
+import { Variants } from 'framer-motion';
+
+// Fade up - Most common, used for sections and cards
+export const fadeUpVariants: Variants = {
+  hidden: { 
+    opacity: 0, 
+    y: 20 
+  },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { 
+      duration: 0.5, 
+      ease: 'easeOut' 
+    }
+  }
+};
+
+// Fade in - Subtle appearance
+export const fadeInVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: { 
+    opacity: 1,
+    transition: { duration: 0.4 }
+  }
+};
+
+// Scale up - For modals, popovers
+export const scaleUpVariants: Variants = {
+  hidden: { 
+    opacity: 0, 
+    scale: 0.95 
+  },
+  visible: { 
+    opacity: 1, 
+    scale: 1,
+    transition: { 
+      duration: 0.2, 
+      ease: 'easeOut' 
+    }
+  },
+  exit: { 
+    opacity: 0, 
+    scale: 0.95,
+    transition: { duration: 0.15 }
+  }
+};
+
+// Slide in from left - For sidebars, drawers
+export const slideInLeftVariants: Variants = {
+  hidden: { x: -20, opacity: 0 },
+  visible: { 
+    x: 0, 
+    opacity: 1,
+    transition: { duration: 0.3 }
+  }
+};
+
+// Slide in from right
+export const slideInRightVariants: Variants = {
+  hidden: { x: 20, opacity: 0 },
+  visible: { 
+    x: 0, 
+    opacity: 1,
+    transition: { duration: 0.3 }
+  }
+};
+
+// Stagger container - Wrap children that should animate sequentially
+export const staggerContainerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.1
+    }
+  }
+};
+
+// Stagger item - Children of stagger container
+export const staggerItemVariants: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { duration: 0.4 }
+  }
+};
+
+// Blur fade - Premium reveal effect
+export const blurFadeVariants: Variants = {
+  hidden: { 
+    opacity: 0, 
+    filter: 'blur(10px)',
+    y: 10
+  },
+  visible: { 
+    opacity: 1, 
+    filter: 'blur(0px)',
+    y: 0,
+    transition: { 
+      duration: 0.5,
+      ease: 'easeOut'
+    }
+  }
+};
+```
+
+---
+
+## Motion Components
+
+### Fade Up Section
+
+Wrap content sections for scroll-triggered fade animations.
+
+```tsx
+// components/motion/motion-section.tsx
+'use client';
+
+import { motion, HTMLMotionProps } from 'framer-motion';
+import { fadeUpVariants } from '@/lib/motion-variants';
+
+interface MotionSectionProps extends HTMLMotionProps<'section'> {
+  children: React.ReactNode;
+  delay?: number;
+}
+
+export function MotionSection({ 
+  children, 
+  delay = 0,
+  className,
+  ...props 
+}: MotionSectionProps) {
+  return (
+    <motion.section
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: '-100px' }}
+      variants={{
+        hidden: { opacity: 0, y: 20 },
+        visible: { 
+          opacity: 1, 
+          y: 0,
+          transition: { 
+            duration: 0.5, 
+            delay,
+            ease: 'easeOut' 
+          }
+        }
+      }}
+      className={className}
+      {...props}
+    >
+      {children}
+    </motion.section>
+  );
+}
+```
+
+### Stagger Grid
+
+Grid where children animate in sequence.
+
+```tsx
+// components/motion/stagger-grid.tsx
+'use client';
+
+import { motion } from 'framer-motion';
+import { staggerContainerVariants, staggerItemVariants } from '@/lib/motion-variants';
+
+interface StaggerGridProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+export function StaggerGrid({ children, className }: StaggerGridProps) {
+  return (
+    <motion.div
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: '-50px' }}
+      variants={staggerContainerVariants}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+export function StaggerItem({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <motion.div variants={staggerItemVariants} className={className}>
+      {children}
+    </motion.div>
+  );
+}
+```
+
+### Usage
+
+```tsx
+<StaggerGrid className="grid gap-6 md:grid-cols-3">
+  {features.map((feature) => (
+    <StaggerItem key={feature.id}>
+      <FeatureCard {...feature} />
+    </StaggerItem>
+  ))}
+</StaggerGrid>
+```
+
+---
+
+## Motion Card
+
+Card with hover animation.
+
+```tsx
+// components/motion/motion-card.tsx
+'use client';
+
+import { motion } from 'framer-motion';
+import { Card, CardProps } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+
+interface MotionCardProps extends CardProps {
+  hoverEffect?: 'lift' | 'scale' | 'glow' | 'none';
+  index?: number;
+}
+
+export function MotionCard({ 
+  children, 
+  className,
+  hoverEffect = 'lift',
+  index = 0,
+  ...props 
+}: MotionCardProps) {
+  const hoverAnimations = {
+    lift: { y: -4 },
+    scale: { scale: 1.02 },
+    glow: { boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)' },
+    none: {},
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.4, delay: index * 0.1 }}
+      whileHover={hoverAnimations[hoverEffect]}
+    >
+      <Card className={cn('transition-shadow duration-300', className)} {...props}>
+        {children}
+      </Card>
+    </motion.div>
+  );
+}
+```
+
+---
+
+## Page Transitions
+
+Animate between routes with AnimatePresence.
+
+```tsx
+// components/motion/page-transition.tsx
+'use client';
+
+import { motion, AnimatePresence } from 'framer-motion';
+import { usePathname } from 'next/navigation';
+
+interface PageTransitionProps {
+  children: React.ReactNode;
+}
+
+export function PageTransition({ children }: PageTransitionProps) {
+  const pathname = usePathname();
+
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={pathname}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+      >
+        {children}
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+```
+
+### Usage in Layout
+
+```tsx
+// app/layout.tsx
+import { PageTransition } from '@/components/motion/page-transition';
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        <PageTransition>
+          {children}
+        </PageTransition>
+      </body>
+    </html>
+  );
+}
+```
+
+---
+
+## Micro-Interactions
+
+### Button with Tap Animation
+
+```tsx
+// Wrap shadcn Button for tap feedback
+'use client';
+
+import { motion } from 'framer-motion';
+import { Button, ButtonProps } from '@/components/ui/button';
+import { forwardRef } from 'react';
+
+const MotionButton = motion(Button);
+
+export const AnimatedButton = forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ children, ...props }, ref) => {
+    return (
+      <MotionButton
+        ref={ref}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        transition={{ duration: 0.15 }}
+        {...props}
+      >
+        {children}
+      </MotionButton>
+    );
+  }
+);
+AnimatedButton.displayName = 'AnimatedButton';
+```
+
+### Hover Card Effect
+
+```tsx
+// Card that lifts and shows shadow on hover
+<motion.div
+  whileHover={{ 
+    y: -4,
+    transition: { duration: 0.2 }
+  }}
+  className="group"
+>
+  <Card className="shadow-subtle group-hover:shadow-elevated transition-shadow">
+    {children}
+  </Card>
+</motion.div>
+```
+
+### Icon Rotation
+
+```tsx
+// Rotate icon on hover (e.g., arrow, refresh)
+<motion.div
+  whileHover={{ rotate: 90 }}
+  transition={{ duration: 0.2 }}
+>
+  <ArrowRight className="h-5 w-5" />
+</motion.div>
+```
+
+---
+
+## Scroll-Triggered Animations
+
+### useInView Hook
+
+```tsx
+'use client';
+
+import { motion, useInView } from 'framer-motion';
+import { useRef } from 'react';
+
+export function AnimatedCounter({ value }: { value: number }) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true });
+
+  return (
+    <motion.span
+      ref={ref}
+      initial={{ opacity: 0 }}
+      animate={isInView ? { opacity: 1 } : {}}
+      transition={{ duration: 0.5 }}
+    >
+      {isInView && (
+        <motion.span
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          {value}
+        </motion.span>
+      )}
+    </motion.span>
+  );
+}
+```
+
+### Scroll Progress
+
+```tsx
+'use client';
+
+import { motion, useScroll, useSpring } from 'framer-motion';
+
+export function ScrollProgress() {
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, {
+    stiffness: 100,
+    damping: 30,
+    restDelta: 0.001
+  });
+
+  return (
+    <motion.div
+      className="fixed top-0 left-0 right-0 h-1 bg-primary origin-left z-50"
+      style={{ scaleX }}
+    />
+  );
+}
+```
+
+---
+
+## Loading States
+
+### Skeleton with Shimmer
+
+```tsx
+// components/motion/skeleton-shimmer.tsx
+'use client';
+
+import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
+
+interface SkeletonShimmerProps {
+  className?: string;
+}
+
+export function SkeletonShimmer({ className }: SkeletonShimmerProps) {
+  return (
+    <div className={cn('relative overflow-hidden rounded-md bg-muted', className)}>
+      <motion.div
+        className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent"
+        animate={{ translateX: ['−100%', '100%'] }}
+        transition={{
+          duration: 1.5,
+          repeat: Infinity,
+          ease: 'linear'
+        }}
+      />
+    </div>
+  );
+}
+```
+
+### Typing Indicator (Chat)
+
+```tsx
+export function TypingIndicator() {
+  return (
+    <div className="flex items-center gap-1">
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="h-2 w-2 rounded-full bg-muted-foreground"
+          animate={{ y: [0, -4, 0] }}
+          transition={{
+            duration: 0.6,
+            repeat: Infinity,
+            delay: i * 0.15
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+```
+
+### Spinner
+
+```tsx
+export function Spinner({ className }: { className?: string }) {
+  return (
+    <motion.div
+      className={cn('h-5 w-5 rounded-full border-2 border-primary border-t-transparent', className)}
+      animate={{ rotate: 360 }}
+      transition={{
+        duration: 1,
+        repeat: Infinity,
+        ease: 'linear'
+      }}
+    />
+  );
+}
+```
+
+---
+
+## Modal/Dialog Animations
+
+### Dialog with Scale Animation
+
+```tsx
+'use client';
+
+import { motion, AnimatePresence } from 'framer-motion';
+import { Dialog, DialogContent, DialogOverlay } from '@/components/ui/dialog';
+
+interface AnimatedDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
+}
+
+export function AnimatedDialog({ open, onOpenChange, children }: AnimatedDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <AnimatePresence>
+        {open && (
+          <>
+            <DialogOverlay asChild>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50"
+              />
+            </DialogOverlay>
+            
+            <DialogContent asChild>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              >
+                {children}
+              </motion.div>
+            </DialogContent>
+          </>
+        )}
+      </AnimatePresence>
+    </Dialog>
+  );
+}
+```
+
+---
+
+## List Animations
+
+### Animated List
+
+```tsx
+'use client';
+
+import { motion, AnimatePresence } from 'framer-motion';
+
+interface AnimatedListProps<T> {
+  items: T[];
+  renderItem: (item: T, index: number) => React.ReactNode;
+  keyExtractor: (item: T) => string;
+}
+
+export function AnimatedList<T>({ items, renderItem, keyExtractor }: AnimatedListProps<T>) {
+  return (
+    <AnimatePresence mode="popLayout">
+      {items.map((item, index) => (
+        <motion.div
+          key={keyExtractor(item)}
+          layout
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.3, delay: index * 0.05 }}
+        >
+          {renderItem(item, index)}
+        </motion.div>
+      ))}
+    </AnimatePresence>
+  );
+}
+```
+
+---
+
+## Performance Guidelines
+
+### 1. Use `viewport={{ once: true }}`
+
+Prevent re-triggering animations on scroll.
+
+```tsx
+// ✅ Good - animates once
+<motion.div
+  whileInView={{ opacity: 1 }}
+  viewport={{ once: true }}
+>
+
+// ❌ Avoid - re-animates every scroll
+<motion.div whileInView={{ opacity: 1 }}>
+```
+
+### 2. Animate Transform Properties
+
+GPU-accelerated properties for smooth performance.
+
+```tsx
+// ✅ Good - GPU accelerated
+animate={{ x: 100, y: 50, scale: 1.1, rotate: 45, opacity: 1 }}
+
+// ❌ Avoid - triggers layout
+animate={{ width: 200, height: 100, left: 50 }}
+```
+
+### 3. Use `layout` Prop Sparingly
+
+Only for elements that need to animate position changes.
+
+```tsx
+// ✅ Use for reorderable lists
+<motion.div layout>
+
+// ❌ Don't use everywhere
+<motion.div layout>Static content</motion.div>
+```
+
+### 4. Reduce Motion for Accessibility
+
+```tsx
+'use client';
+
+import { motion, useReducedMotion } from 'framer-motion';
+
+export function AccessibleAnimation({ children }) {
+  const shouldReduceMotion = useReducedMotion();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: shouldReduceMotion ? 0 : 0.5 }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+```
+
+---
+
+## Quick Reference
+
+### Common Transitions
+
+```typescript
+// Smooth easeOut (default for most animations)
+transition: { duration: 0.3, ease: 'easeOut' }
+
+// Snappy for micro-interactions
+transition: { duration: 0.15, ease: 'easeInOut' }
+
+// Spring for natural feel
+transition: { type: 'spring', stiffness: 300, damping: 20 }
+
+// Stagger for lists
+transition: { staggerChildren: 0.1 }
+```
+
+### Duration Guidelines
+
+| Animation Type | Duration |
+|----------------|----------|
+| Micro-interactions (hover, tap) | 0.1-0.2s |
+| Fade in/out | 0.2-0.3s |
+| Slide animations | 0.3-0.4s |
+| Page transitions | 0.3-0.4s |
+| Complex reveals | 0.5-0.7s |
+
+### Import Pattern
+
+```tsx
+// Always import from framer-motion
+import { motion, AnimatePresence, useInView } from 'framer-motion';
+
+// Import shared variants
+import { fadeUpVariants, staggerContainerVariants } from '@/lib/motion-variants';
+```
+
