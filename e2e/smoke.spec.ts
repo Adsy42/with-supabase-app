@@ -4,8 +4,8 @@ test.describe('Smoke Tests', () => {
   test('homepage loads successfully', async ({ page }) => {
     await page.goto('/');
     
-    // Check that the page loaded
-    await expect(page).toHaveTitle(/Next.js/i);
+    // Check that the page loaded - updated for Orderly branding
+    await expect(page).toHaveTitle(/Orderly/i);
     
     // Check for main content
     await expect(page.locator('body')).toBeVisible();
@@ -24,7 +24,8 @@ test.describe('Smoke Tests', () => {
     
     // Check that sign up form elements exist
     await expect(page.locator('input[type="email"], input[name="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"], input[name="password"]')).toBeVisible();
+    // Sign up has both password and repeat-password fields, check for the first one
+    await expect(page.locator('input#password')).toBeVisible();
   });
 
   test('navigation works', async ({ page }) => {
@@ -58,4 +59,3 @@ test.describe('Smoke Tests', () => {
     expect(criticalErrors).toHaveLength(0);
   });
 });
-

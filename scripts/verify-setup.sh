@@ -113,14 +113,21 @@ check_env() {
             check_fail "NEXT_PUBLIC_SUPABASE_URL missing"
         fi
         
-        if grep -q "NEXT_PUBLIC_SUPABASE_ANON_KEY" .env.local 2>/dev/null; then
+        # Check for either ANON_KEY or PUBLISHABLE_KEY (both are valid)
+        if grep -q "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" .env.local 2>/dev/null; then
+            if grep -q "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$" .env.local 2>/dev/null || grep -q 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=""' .env.local 2>/dev/null; then
+                check_warn "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is empty"
+            else
+                check_pass "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is set"
+            fi
+        elif grep -q "NEXT_PUBLIC_SUPABASE_ANON_KEY" .env.local 2>/dev/null; then
             if grep -q "NEXT_PUBLIC_SUPABASE_ANON_KEY=$" .env.local 2>/dev/null || grep -q 'NEXT_PUBLIC_SUPABASE_ANON_KEY=""' .env.local 2>/dev/null; then
                 check_warn "NEXT_PUBLIC_SUPABASE_ANON_KEY is empty"
             else
                 check_pass "NEXT_PUBLIC_SUPABASE_ANON_KEY is set"
             fi
         else
-            check_fail "NEXT_PUBLIC_SUPABASE_ANON_KEY missing"
+            check_fail "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY missing"
         fi
     else
         check_fail ".env.local missing (run setup.sh)"
@@ -151,6 +158,16 @@ check_git_hooks() {
             fi
         else
             check_warn "commit-msg hook missing"
+        fi
+        
+        if [ -f ".husky/pre-push" ]; then
+            if [ -x ".husky/pre-push" ]; then
+                check_pass "pre-push hook executable (branch naming)"
+            else
+                check_warn "pre-push hook not executable"
+            fi
+        else
+            check_warn "pre-push hook missing (branch naming not enforced locally)"
         fi
     else
         check_warn ".husky directory missing"

@@ -1,0 +1,292 @@
+---
+description: Orderly design system - brand colors, typography, components, and patterns
+globs: ["**/*.tsx", "**/*.css", "components/**/*"]
+---
+
+# Orderly Design System
+
+## Brand Identity
+
+Orderly is a **premium AI legal assistant** for Australian law firms. The design must convey:
+- **Trust** - Critical for legal industry
+- **Intelligence** - AI-powered, sophisticated
+- **Precision** - Accurate, professional
+- **Premium** - High-end, not generic
+
+**Inspiration:** Harvey.ai - dark, sophisticated, document-focused (NOT chatbot-style)
+
+---
+
+## Color System
+
+### Primary Brand Colors (from logo gradient)
+
+| Token | Hex | HSL | Usage |
+|-------|-----|-----|-------|
+| `orderly-500` | `#3B5EEB` | `229 82% 58%` | Primary actions, links |
+| `orderly-600` | `#2547D0` | `229 70% 48%` | Hover states |
+| `orderly-700` | `#1E3A8A` | `224 64% 33%` | Active states |
+| `orderly-900` | `#0F1629` | `225 45% 11%` | Dark backgrounds |
+| `orderly-950` | `#0A0F1A` | `222 45% 7%` | Darkest background |
+
+### Usage Rules
+
+```tsx
+// ✅ CORRECT: Use semantic tokens
+<div className="bg-background text-foreground">
+<Button className="bg-primary">
+
+// ❌ WRONG: Don't use raw hex values
+<div style={{ background: '#3B5EEB' }}>
+<div className="bg-[#0A0F1A]">
+```
+
+### Dark Mode First
+
+Orderly uses **dark mode as the primary theme**. Always design for dark mode first, then ensure light mode works.
+
+```tsx
+// Default theme is dark in layout.tsx
+<ThemeProvider defaultTheme="dark">
+```
+
+---
+
+## Typography
+
+### Font Family
+
+- **Sans:** Outfit (matches logo wordmark - geometric, rounded 'O')
+- **Mono:** JetBrains Mono (for code, legal citations)
+
+### Type Scale
+
+| Element | Classes | Usage |
+|---------|---------|-------|
+| Display | `text-5xl font-semibold tracking-tight` | Hero headlines |
+| H1 | `text-4xl font-semibold tracking-tight` | Page titles |
+| H2 | `text-2xl font-semibold` | Section headers |
+| H3 | `text-xl font-medium` | Card titles |
+| Body Large | `text-lg leading-relaxed` | Intro paragraphs |
+| Body | `text-base leading-relaxed` | Default text |
+| Small | `text-sm` | Secondary text |
+| Caption | `text-xs font-medium tracking-wide` | Labels, badges |
+
+### Legal Document Text
+
+For legal content, use extra line height for readability:
+
+```tsx
+<p className="text-base leading-7">
+  // Legal document text with generous line height
+</p>
+```
+
+---
+
+## Components
+
+### Buttons
+
+```tsx
+// Primary CTA - use gradient variant
+<Button variant="gradient" size="lg">
+  Start Free Trial
+</Button>
+
+// Standard actions
+<Button variant="default">Submit</Button>
+
+// Secondary actions
+<Button variant="secondary">Cancel</Button>
+
+// Outline for emphasis without filling
+<Button variant="outline">Learn More</Button>
+
+// Ghost for toolbar/nav actions
+<Button variant="ghost" size="icon">
+  <Icon />
+</Button>
+```
+
+### Cards
+
+```tsx
+// Default card
+<Card>
+  <CardHeader>
+    <CardTitle>Title</CardTitle>
+    <CardDescription>Description</CardDescription>
+  </CardHeader>
+  <CardContent>Content</CardContent>
+</Card>
+
+// Featured card - with glow (for pricing, features)
+<Card variant="featured">
+
+// Glass card - on gradient backgrounds
+<Card variant="glass">
+
+// Elevated - for floating elements
+<Card variant="elevated">
+```
+
+### Spacing
+
+Use Tailwind spacing scale consistently:
+
+- **Component padding:** `p-6` (default), `p-8` (featured)
+- **Section spacing:** `py-16 lg:py-24`
+- **Gap between items:** `gap-4` (tight), `gap-6` (default), `gap-8` (loose)
+- **Max content width:** `max-w-7xl` (marketing), `max-w-4xl` (reading)
+
+---
+
+## Animation Guidelines
+
+### Use CSS First
+
+```tsx
+// ✅ CORRECT: CSS transitions for simple states
+<Button className="transition-all duration-200 hover:shadow-glow">
+
+// ❌ WRONG: Don't add Framer Motion for simple hover
+<motion.button whileHover={{ scale: 1.05 }}>
+```
+
+### When to Use JS Animation
+
+Only use Framer Motion for:
+- Staggered list animations
+- Complex orchestrated sequences
+- Gesture-based interactions
+
+```tsx
+// If needed, dynamic import Framer Motion
+const AnimatedList = dynamic(() => import('./animated-list'), { ssr: false });
+```
+
+### Timing
+
+- **Micro-interactions:** 150ms (hover, focus)
+- **UI transitions:** 200ms (modals, dropdowns)
+- **Page transitions:** 300ms (route changes)
+
+---
+
+## Icons
+
+Use **Lucide React** with consistent stroke width:
+
+```tsx
+import { FileText, Scale, Search } from 'lucide-react';
+
+// Standard icon
+<FileText className="h-5 w-5" strokeWidth={1.75} />
+
+// Sizes: h-4 w-4 (sm), h-5 w-5 (default), h-6 w-6 (lg)
+```
+
+---
+
+## Accessibility
+
+### Focus States
+
+All interactive elements must have visible focus:
+
+```tsx
+// Built into Button component
+className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+```
+
+### Color Contrast
+
+- Body text: 4.5:1 minimum
+- Large text: 3:1 minimum
+- Interactive elements: Clear focus indicators
+
+### Reduced Motion
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  .animate-glow-pulse {
+    animation: none;
+  }
+}
+```
+
+---
+
+## What NOT to Do (Avoid Generic AI Look)
+
+### ❌ DON'T
+
+- Use chat bubbles for AI responses
+- Add floating orbs/blobs backgrounds
+- Use robot avatars or AI assistant faces
+- Add "typing..." indicators like chatbots
+- Use generic "tech blue" (#0066FF)
+- Copy ChatGPT's interface patterns
+
+### ✅ DO
+
+- Use document-style interfaces (like Notion, Linear)
+- Show structured, formatted responses
+- Use the Orderly brand blue (#3B5EEB)
+- Design like a legal tool that happens to use AI
+- Prioritise clarity and scanability
+- Use professional, subtle animations
+
+---
+
+## Australian Localisation
+
+### Date/Time Formats
+
+```tsx
+// ✅ Australian format
+const date = new Date().toLocaleDateString('en-AU'); // DD/MM/YYYY
+
+// Time format
+const time = new Date().toLocaleTimeString('en-AU', { 
+  hour: '2-digit', 
+  minute: '2-digit' 
+}); // 14:30
+```
+
+### Spelling
+
+Use Australian English:
+- colour (not color)
+- organisation (not organization)
+- analyse (not analyze)
+- licence (noun) / license (verb)
+
+---
+
+## File Organisation
+
+```
+components/
+├── ui/                 # Primitive components (Button, Card, Input)
+├── forms/              # Form-specific components
+├── layout/             # Header, Footer, Sidebar
+├── features/           # Feature-specific (chat, documents, etc.)
+└── brand/              # Logo, brand elements
+```
+
+---
+
+## Quick Reference
+
+| Need | Use |
+|------|-----|
+| Primary action | `<Button variant="gradient">` |
+| Secondary action | `<Button variant="secondary">` |
+| Card with glow | `<Card variant="featured">` |
+| Overlay card | `<Card variant="glass">` |
+| Brand color | `bg-primary` or `text-primary` |
+| Brand gradient | `bg-gradient-orderly` |
+| Glow effect | `shadow-glow` |
+| Fade animation | `animate-fade-in` |

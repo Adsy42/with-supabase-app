@@ -1,0 +1,375 @@
+---
+description: UI/UX design best practices for prototyping and building user interfaces
+globs: ["app/**/*.tsx", "components/**/*.tsx"]
+alwaysApply: false
+---
+
+# UI/UX Design Best Practices
+
+Reference: [cursor.directory/ui-ux-design-best-practices](https://cursor.directory/ui-ux-design-best-practices)
+
+## Visual Design
+
+### Visual Hierarchy
+- Establish clear visual hierarchy to guide user attention
+- Use size, color, contrast, and spacing to indicate importance
+- Primary actions should be visually prominent
+- Group related elements together
+
+### Color Palette
+- Use the existing CSS variables in `globals.css` for theming
+- Maintain brand consistency across the application
+- Use semantic colors: `destructive` for errors, `primary` for actions
+- Ensure color is not the only indicator of meaning (accessibility)
+
+```tsx
+// Good: Using theme colors
+<Button variant="destructive">Delete</Button>
+<span className="text-muted-foreground">Secondary text</span>
+
+// Bad: Hardcoded colors
+<button className="bg-red-500">Delete</button>
+```
+
+### Typography
+- Use the font scale defined in Tailwind config
+- Limit to 2-3 font sizes per component
+- Use `font-medium` or `font-semibold` for emphasis, not bold everywhere
+- Ensure readable line lengths (45-75 characters for body text)
+
+```tsx
+// Typography scale
+<h1 className="text-4xl font-bold tracking-tight">Page Title</h1>
+<h2 className="text-2xl font-semibold">Section Title</h2>
+<p className="text-base text-muted-foreground">Body text</p>
+<span className="text-sm">Small text</span>
+```
+
+### Contrast & Accessibility
+- Maintain WCAG 2.1 AA contrast ratios (4.5:1 for text, 3:1 for large text)
+- Test with both light and dark themes
+- Use `text-foreground` and `text-muted-foreground` for proper contrast
+
+## Interaction Design
+
+### Navigation
+- Keep navigation consistent across pages
+- Use breadcrumbs for deep hierarchies
+- Highlight current location in nav
+- Provide clear "back" options
+
+### UI Components
+- Use familiar patterns (don't reinvent standard components)
+- Keep interactive elements recognizable (buttons look clickable)
+- Use shadcn/ui components for consistency
+- Minimum touch target size: 44x44px for mobile
+
+### Calls-to-Action (CTAs)
+- One primary CTA per view/section
+- Use action verbs: "Create Account" not "Submit"
+- Make CTAs visually distinct from other elements
+
+```tsx
+// Good: Clear primary action
+<div className="flex gap-2">
+  <Button variant="outline">Cancel</Button>
+  <Button>Save Changes</Button>
+</div>
+
+// Bad: Competing primary actions
+<div className="flex gap-2">
+  <Button>Cancel</Button>
+  <Button>Save</Button>
+</div>
+```
+
+### Responsive Design
+- Mobile-first approach: design for small screens, then scale up
+- Use Tailwind responsive prefixes: `sm:`, `md:`, `lg:`, `xl:`
+- Test at common breakpoints: 375px, 768px, 1024px, 1280px
+
+```tsx
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {/* Cards that stack on mobile, 2-col on tablet, 3-col on desktop */}
+</div>
+```
+
+### Animations & Transitions
+- Use animations purposefully (guide attention, provide feedback)
+- Keep animations short: 150-300ms for micro-interactions
+- Respect `prefers-reduced-motion`
+
+```tsx
+// Motion-safe animations
+<div className="transition-all duration-200 hover:scale-105 motion-reduce:transform-none">
+  Content
+</div>
+```
+
+## Accessibility
+
+### Semantic HTML
+```tsx
+// Good: Semantic structure
+<main>
+  <header>
+    <nav aria-label="Main navigation">...</nav>
+  </header>
+  <article>
+    <h1>Title</h1>
+    <section aria-labelledby="section-title">
+      <h2 id="section-title">Section</h2>
+    </section>
+  </article>
+</main>
+
+// Bad: Div soup
+<div>
+  <div>
+    <div>...</div>
+  </div>
+</div>
+```
+
+### Keyboard Navigation
+- All interactive elements must be keyboard accessible
+- Visible focus indicators (don't remove `outline`)
+- Logical tab order (follows visual order)
+- Use `focus-visible` for mouse/keyboard differentiation
+
+```tsx
+<button className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+  Click me
+</button>
+```
+
+### Screen Readers
+- Provide `alt` text for meaningful images
+- Use `aria-label` for icon-only buttons
+- Hide decorative elements: `aria-hidden="true"`
+- Announce dynamic content changes
+
+```tsx
+// Icon button with label
+<Button size="icon" aria-label="Close dialog">
+  <X className="h-4 w-4" />
+</Button>
+
+// Decorative image
+<img src="/decoration.svg" alt="" aria-hidden="true" />
+```
+
+## User Feedback
+
+### Loading States
+- Show loading indicators for async operations
+- Use skeleton loaders for content areas
+- Disable buttons during submission
+
+```tsx
+<Button disabled={isLoading}>
+  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+  {isLoading ? "Saving..." : "Save Changes"}
+</Button>
+```
+
+### Error Handling
+- Show errors near the source (inline validation)
+- Provide clear recovery actions
+- Use `destructive` variant for error states
+- Don't just show "Error" - explain what went wrong
+
+```tsx
+// Form field with error
+<div className="space-y-2">
+  <Label htmlFor="email">Email</Label>
+  <Input
+    id="email"
+    aria-invalid={!!error}
+    aria-describedby={error ? "email-error" : undefined}
+    className={error ? "border-destructive" : ""}
+  />
+  {error && (
+    <p id="email-error" className="text-sm text-destructive">
+      {error}
+    </p>
+  )}
+</div>
+```
+
+### Success Feedback
+- Confirm successful actions clearly
+- Use toast notifications for non-blocking feedback
+- Provide next steps when appropriate
+
+```tsx
+import { toast } from "sonner";
+
+// Success feedback
+toast.success("Changes saved successfully");
+
+// With action
+toast.success("Profile updated", {
+  action: {
+    label: "View Profile",
+    onClick: () => router.push("/profile"),
+  },
+});
+```
+
+## Mobile-First Design
+
+### Touch-Friendly Elements
+- Minimum touch target: 44x44px
+- Adequate spacing between touch targets (8px minimum)
+- Consider thumb zones for important actions
+
+```tsx
+// Touch-friendly list items
+<button className="flex items-center gap-3 w-full p-4 min-h-[44px]">
+  <Icon className="h-5 w-5" />
+  <span>Menu Item</span>
+</button>
+```
+
+### Mobile Navigation Patterns
+- Use bottom navigation for primary actions on mobile
+- Hamburger menu for secondary navigation
+- Consider swipe gestures for common actions
+
+### Responsive Images
+```tsx
+import Image from "next/image";
+
+<Image
+  src="/hero.jpg"
+  alt="Hero image"
+  width={1200}
+  height={600}
+  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+  className="object-cover"
+  priority // for above-the-fold images
+/>
+```
+
+## Information Architecture
+
+### Content Organization
+- Group related items together
+- Use progressive disclosure (show more on demand)
+- Limit choices to avoid decision paralysis (7±2 rule)
+
+### Clear Labeling
+- Use descriptive, user-friendly labels
+- Avoid jargon and technical terms
+- Be consistent with terminology
+
+### Search & Filtering
+- Provide search for large data sets
+- Show active filters clearly
+- Allow easy filter clearing
+
+## Consistency
+
+### Design System Usage
+- Use shadcn/ui components consistently
+- Don't create custom components when existing ones work
+- Follow established patterns for common UI elements
+
+### Spacing System
+Use Tailwind's spacing scale consistently:
+- `gap-2` (8px) - tight grouping
+- `gap-4` (16px) - related elements
+- `gap-6` (24px) - section spacing
+- `gap-8` (32px) - major sections
+
+```tsx
+// Consistent card layout
+<Card className="p-6">
+  <CardHeader className="space-y-2">
+    <CardTitle>Title</CardTitle>
+    <CardDescription>Description</CardDescription>
+  </CardHeader>
+  <CardContent className="space-y-4">
+    {/* Content with consistent spacing */}
+  </CardContent>
+  <CardFooter className="gap-2">
+    <Button variant="outline">Cancel</Button>
+    <Button>Confirm</Button>
+  </CardFooter>
+</Card>
+```
+
+## Prototyping Checklist
+
+When building new UI:
+
+```
+□ Visual Hierarchy - Is the most important element obvious?
+□ Mobile First - Does it work on a 375px screen?
+□ Touch Targets - Are buttons/links at least 44px?
+□ Loading States - What shows during async operations?
+□ Error States - How are errors displayed?
+□ Empty States - What shows when there's no data?
+□ Keyboard Navigation - Can you tab through everything?
+□ Dark Mode - Does it look good in both themes?
+□ Contrast - Is text readable against backgrounds?
+□ Feedback - Does the user know their action worked?
+```
+
+## Quick Patterns
+
+### Empty State
+```tsx
+<div className="flex flex-col items-center justify-center py-12 text-center">
+  <Icon className="h-12 w-12 text-muted-foreground mb-4" />
+  <h3 className="text-lg font-semibold">No items yet</h3>
+  <p className="text-sm text-muted-foreground mb-4">
+    Get started by creating your first item.
+  </p>
+  <Button>Create Item</Button>
+</div>
+```
+
+### Confirmation Dialog
+```tsx
+<AlertDialog>
+  <AlertDialogTrigger asChild>
+    <Button variant="destructive">Delete</Button>
+  </AlertDialogTrigger>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+      <AlertDialogDescription>
+        This action cannot be undone. This will permanently delete your item.
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter>
+      <AlertDialogCancel>Cancel</AlertDialogCancel>
+      <AlertDialogAction className="bg-destructive text-destructive-foreground">
+        Delete
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
+```
+
+### Form Layout
+```tsx
+<form className="space-y-6">
+  <div className="space-y-4">
+    <div className="space-y-2">
+      <Label htmlFor="name">Name</Label>
+      <Input id="name" placeholder="Enter your name" />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="email">Email</Label>
+      <Input id="email" type="email" placeholder="you@example.com" />
+    </div>
+  </div>
+  <div className="flex justify-end gap-2">
+    <Button type="button" variant="outline">Cancel</Button>
+    <Button type="submit">Submit</Button>
+  </div>
+</form>
+```
