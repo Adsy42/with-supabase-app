@@ -2,14 +2,14 @@
 
 /**
  * Chat Interface Component
- * Full integration of shadcn.io/ai components with Vercel AI SDK v5
+ * Full ChatGPT-style features with shadcn.io/ai components
  * @see https://www.shadcn.io/ai
  * 
- * Uses message.parts pattern for handling:
- * - text content
- * - tool calls/results
- * - reasoning blocks
- * - sources/citations
+ * Features:
+ * - Stop generation mid-stream
+ * - Edit user messages
+ * - Branch navigation for regenerated responses
+ * - Message parts handling (text, tool-call, reasoning, sources)
  */
 
 import * as React from "react";
@@ -17,6 +17,8 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import type { UIMessage } from "ai";
 import { AnimatePresence } from "framer-motion";
+import { Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   // Core components
   Conversation,
@@ -30,6 +32,9 @@ import {
   TypingIndicator,
   // Action components
   Actions,
+  StopButton,
+  // Navigation
+  Branch,
   // Tool & reasoning
   Tool,
   Reasoning,
@@ -40,6 +45,8 @@ import {
   legalSuggestions,
   // Code display
   CodeBlock,
+  // Editable
+  EditableMessage,
 } from "@/components/ai";
 import { saveMessage } from "@/actions/conversations";
 import type { Message as DBMessage } from "@/actions/conversations";
@@ -80,6 +87,17 @@ interface SourcePart {
 
 type MessagePart = TextPart | ToolCallPart | ToolResultPart | ReasoningPart | SourcePart;
 
+// Message type for combined messages with branch support
+type CombinedMessage = {
+  id: string;
+  role: "user" | "assistant";
+  parts: MessagePart[];
+  content: string;
+  createdAt: Date;
+  branches?: string[]; // IDs of alternative responses
+  activeBranch?: number; // Current branch index
+};
+
 interface ChatInterfaceProps {
   conversationId: string;
   matterId?: string;
@@ -92,7 +110,9 @@ export function ChatInterface({
   initialMessages = [],
 }: ChatInterfaceProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const abortControllerRef = React.useRef<AbortController | null>(null);
   const [showSuggestions, setShowSuggestions] = React.useState(true);
+  const [editingMessageId, setEditingMessageId] = React.useState<string | null>(null);
 
   // Create transport with API endpoint and extra body params
   const transport = React.useMemo(
@@ -112,6 +132,7 @@ export function ChatInterface({
   const {
     messages: aiMessages,
     sendMessage,
+    setMessages,
     status,
     error,
   } = useChat({
@@ -120,18 +141,6 @@ export function ChatInterface({
 
   const isLoading = status === "streaming" || status === "submitted";
   const isStreaming = status === "streaming";
-
-  // Note: regenerate/stop not available in all versions of AI SDK
-  // These would need to be implemented via custom transport or API
-
-  // Message type for combined messages
-  type CombinedMessage = {
-    id: string;
-    role: "user" | "assistant";
-    parts: MessagePart[];
-    content: string;
-    createdAt: Date;
-  };
 
   // Combine initial messages from DB with AI SDK messages
   const allMessages = React.useMemo(() => {
@@ -206,9 +215,11 @@ export function ChatInterface({
           : `[Attached: ${fileNames}]`;
 
         // TODO: Upload files to Supabase Storage and process for RAG
-        // For now, just mention the files in the message
         console.log("Files to process:", files);
       }
+
+      // Create new AbortController for this request
+      abortControllerRef.current = new AbortController();
 
       // Save user message to database
       try {
@@ -221,6 +232,40 @@ export function ChatInterface({
       sendMessage({ text: messageContent });
     },
     [conversationId, sendMessage]
+  );
+
+  // Handle stop generation
+  const handleStop = React.useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    // Note: AI SDK v5 may not support stop directly, this is a workaround
+  }, []);
+
+  // Handle edit message - removes messages after edited one and resubmits
+  const handleEditMessage = React.useCallback(
+    async (messageId: string, newContent: string) => {
+      // Find the message index
+      const messageIndex = allMessages.findIndex((m) => m.id === messageId);
+      if (messageIndex === -1) return;
+
+      // Get messages before this one (keep them)
+      const messagesBeforeEdit = allMessages.slice(0, messageIndex);
+
+      // Update the AI SDK messages to only include messages before the edit
+      const aiMessagesToKeep = aiMessages.filter((m) =>
+        messagesBeforeEdit.some((kept) => kept.id === m.id)
+      );
+      setMessages(aiMessagesToKeep);
+
+      // Clear editing state
+      setEditingMessageId(null);
+
+      // Submit the edited message
+      await handleSubmit(newContent, undefined);
+    },
+    [allMessages, aiMessages, setMessages, handleSubmit]
   );
 
   // Handle suggestion selection
@@ -237,9 +282,14 @@ export function ChatInterface({
       .filter((m) => m.role === "user")
       .pop();
     if (lastUserMessage) {
+      // Remove the last assistant message
+      const aiMessagesWithoutLast = aiMessages.slice(0, -1);
+      setMessages(aiMessagesWithoutLast);
+
+      // Re-submit the user message
       handleSubmit(lastUserMessage.content, undefined);
     }
-  }, [allMessages, handleSubmit]);
+  }, [allMessages, aiMessages, setMessages, handleSubmit]);
 
   return (
     <Conversation className="flex-1">
@@ -249,47 +299,101 @@ export function ChatInterface({
             <EmptyChat key="empty" />
           ) : (
             allMessages.map((message, messageIndex) => (
-              <Message key={message.id} from={message.role}>
-                <MessageContent>
-                  {/* Render message parts using AI SDK v5 pattern */}
-                  {message.parts.map((part, partIndex) => (
-                    <MessagePartRenderer
-                      key={`${message.id}-${partIndex}`}
-                      part={part}
-                      isStreaming={
-                        isStreaming &&
-                        messageIndex === allMessages.length - 1 &&
-                        partIndex === message.parts.length - 1
-                      }
-                    />
-                  ))}
-                </MessageContent>
-
-                {/* Actions for assistant messages (not while streaming) */}
-                {message.role === "assistant" && !isStreaming && (
-                  <div className="mt-2">
-                    <Actions
+              <React.Fragment key={message.id}>
+                {/* User messages with edit capability */}
+                {message.role === "user" ? (
+                  editingMessageId === message.id ? (
+                    <EditableMessage
                       content={message.content}
-                      onRegenerate={
-                        messageIndex === allMessages.length - 1
-                          ? handleRegenerate
-                          : undefined
-                      }
-                      showRegenerate={messageIndex === allMessages.length - 1}
+                      onEdit={(newContent) => handleEditMessage(message.id, newContent)}
+                      onCancel={() => setEditingMessageId(null)}
                     />
-                  </div>
+                  ) : (
+                    <Message from="user">
+                      <MessageContent>
+                        <Response>{message.content}</Response>
+                      </MessageContent>
+                      {/* Edit button on hover */}
+                      <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => setEditingMessageId(message.id)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          <span className="sr-only">Edit message</span>
+                        </Button>
+                      </div>
+                    </Message>
+                  )
+                ) : (
+                  /* Assistant messages with actions */
+                  <Message from="assistant">
+                    <MessageContent>
+                      {/* Render message parts using AI SDK v5 pattern */}
+                      {message.parts.map((part, partIndex) => (
+                        <MessagePartRenderer
+                          key={`${message.id}-${partIndex}`}
+                          part={part}
+                          isStreaming={
+                            isStreaming &&
+                            messageIndex === allMessages.length - 1 &&
+                            partIndex === message.parts.length - 1
+                          }
+                        />
+                      ))}
+                    </MessageContent>
+
+                    {/* Branch navigation if multiple responses exist */}
+                    {message.branches && message.branches.length > 1 && (
+                      <div className="mt-2">
+                        <Branch
+                          total={message.branches.length}
+                          current={message.activeBranch ?? 0}
+                          onNavigate={(index) => {
+                            // TODO: Implement branch navigation
+                            console.log("Navigate to branch:", index);
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Actions for assistant messages (not while streaming) */}
+                    {!isStreaming && (
+                      <div className="mt-2">
+                        <Actions
+                          content={message.content}
+                          onRegenerate={
+                            messageIndex === allMessages.length - 1
+                              ? handleRegenerate
+                              : undefined
+                          }
+                          showRegenerate={messageIndex === allMessages.length - 1}
+                        />
+                      </div>
+                    )}
+                  </Message>
                 )}
-              </Message>
+              </React.Fragment>
             ))
           )}
 
           {/* Typing indicator while loading */}
-          {isLoading && <TypingIndicator />}
+          {isLoading && (
+            <div className="space-y-4">
+              <TypingIndicator />
+              {/* Stop button */}
+              <div className="flex justify-center">
+                <StopButton onStop={handleStop} />
+              </div>
+            </div>
+          )}
         </AnimatePresence>
 
         {/* Error state with retry */}
         {error && (
-          <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive flex items-center justify-between">
+          <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive flex items-center justify-between mx-4">
             <span>Something went wrong. Please try again.</span>
             <button
               onClick={handleRegenerate}

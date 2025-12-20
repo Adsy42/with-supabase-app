@@ -2,7 +2,7 @@
 
 /**
  * Actions Component
- * Interactive action buttons for AI responses and messages
+ * Interactive action buttons for AI responses and messages - ChatGPT style
  * Based on shadcn.io/ai patterns
  * @see https://www.shadcn.io/ai
  */
@@ -15,6 +15,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   MoreHorizontal,
+  Pencil,
+  Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,9 +31,11 @@ interface ActionsProps {
   content?: string;
   onCopy?: () => void;
   onRegenerate?: () => void;
+  onEdit?: () => void;
   onFeedback?: (type: "positive" | "negative") => void;
   showCopy?: boolean;
   showRegenerate?: boolean;
+  showEdit?: boolean;
   showFeedback?: boolean;
   className?: string;
 }
@@ -40,9 +44,11 @@ export function Actions({
   content,
   onCopy,
   onRegenerate,
+  onEdit,
   onFeedback,
   showCopy = true,
   showRegenerate = true,
+  showEdit = false,
   showFeedback = true,
   className,
 }: ActionsProps) {
@@ -67,7 +73,7 @@ export function Actions({
   );
 
   return (
-    <div className={cn("flex items-center gap-1", className)}>
+    <div className={cn("flex items-center gap-0.5", className)}>
       {showCopy && (
         <ActionButton
           icon={copied ? Check : Copy}
@@ -77,7 +83,15 @@ export function Actions({
         />
       )}
 
-      {showRegenerate && (
+      {showEdit && onEdit && (
+        <ActionButton
+          icon={Pencil}
+          label="Edit"
+          onClick={onEdit}
+        />
+      )}
+
+      {showRegenerate && onRegenerate && (
         <ActionButton
           icon={RefreshCw}
           label="Regenerate"
@@ -89,13 +103,13 @@ export function Actions({
         <>
           <ActionButton
             icon={ThumbsUp}
-            label="Helpful"
+            label="Good response"
             onClick={() => handleFeedback("positive")}
             active={feedback === "positive"}
           />
           <ActionButton
             icon={ThumbsDown}
-            label="Not helpful"
+            label="Bad response"
             onClick={() => handleFeedback("negative")}
             active={feedback === "negative"}
           />
@@ -110,22 +124,46 @@ interface ActionButtonProps {
   label: string;
   onClick?: () => void;
   active?: boolean;
+  disabled?: boolean;
 }
 
-function ActionButton({ icon: Icon, label, onClick, active }: ActionButtonProps) {
+function ActionButton({ icon: Icon, label, onClick, active, disabled }: ActionButtonProps) {
   return (
     <Button
       variant="ghost"
       size="icon"
       className={cn(
-        "h-8 w-8 text-muted-foreground hover:text-foreground",
+        "h-7 w-7 text-muted-foreground hover:text-foreground",
         active && "text-primary"
       )}
       onClick={onClick}
+      disabled={disabled}
       title={label}
     >
-      <Icon className="h-4 w-4" />
+      <Icon className="h-3.5 w-3.5" />
       <span className="sr-only">{label}</span>
+    </Button>
+  );
+}
+
+/**
+ * StopButton - Button to stop generation
+ */
+interface StopButtonProps {
+  onStop: () => void;
+  className?: string;
+}
+
+export function StopButton({ onStop, className }: StopButtonProps) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onStop}
+      className={cn("gap-2", className)}
+    >
+      <Square className="h-3 w-3 fill-current" />
+      Stop generating
     </Button>
   );
 }
@@ -145,9 +183,9 @@ export function ActionsMenu({ children, className }: ActionsMenuProps) {
         <Button
           variant="ghost"
           size="icon"
-          className={cn("h-8 w-8 text-muted-foreground", className)}
+          className={cn("h-7 w-7 text-muted-foreground", className)}
         >
-          <MoreHorizontal className="h-4 w-4" />
+          <MoreHorizontal className="h-3.5 w-3.5" />
           <span className="sr-only">More actions</span>
         </Button>
       </DropdownMenuTrigger>
@@ -157,4 +195,3 @@ export function ActionsMenu({ children, className }: ActionsMenuProps) {
 }
 
 export { DropdownMenuItem as ActionsMenuItem };
-

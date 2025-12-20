@@ -34,7 +34,10 @@ export {
 } from "./loader";
 
 // Action components
-export { Actions, ActionsMenu, ActionsMenuItem } from "./actions";
+export { Actions, ActionsMenu, ActionsMenuItem, StopButton } from "./actions";
+
+// Editable message
+export { EditableMessage } from "./editable-message";
 
 // Tool and reasoning components
 export { Tool } from "./tool";
