@@ -1,0 +1,241 @@
+---
+description: Supabase database patterns including migrations, functions, schema, and SQL style
+globs: ["supabase/**/*.sql", "supabase/migrations/**", "supabase/schemas/**"]
+---
+
+# Supabase Database Guide
+
+## SQL Style Guide
+
+### General Rules
+- Use **lowercase** for SQL reserved words
+- Use **snake_case** for tables and columns
+- Use **plurals** for table names, **singular** for columns
+- Store dates in ISO 8601 format (`yyyy-mm-ddThh:mm:ss.sssss`)
+- Include comments for complex logic
+
+### Table Conventions
+
+```sql
+-- Always include: id, created_at, RLS enabled, and a comment
+create table public.books (
+  id bigint generated always as identity primary key,
+  title text not null,
+  author_id bigint references public.authors (id),
+  created_at timestamptz default now()
+);
+
+-- Always enable RLS
+alter table public.books enable row level security;
+
+-- Always add a table comment
+comment on table public.books is 'Library book catalog with author references.';
+```
+
+### Column Naming
+- Foreign keys: `{singular_table}_id` (e.g., `user_id` references `users`)
+- Timestamps: `created_at`, `updated_at`, `deleted_at`
+- Booleans: `is_active`, `has_access`, `can_edit`
+
+### Query Formatting
+
+```sql
+-- Short queries: keep compact
+select * from employees where end_date is null;
+
+-- Long queries: use newlines for readability
+select
+  employees.first_name,
+  employees.last_name,
+  departments.department_name
+from
+  employees
+join
+  departments on employees.department_id = departments.department_id
+where
+  employees.start_date > '2022-01-01';
+```
+
+---
+
+## Creating Migrations
+
+### File Naming Convention
+
+Migration files go in `supabase/migrations/` with format:
+```
+YYYYMMDDHHmmss_short_description.sql
+```
+
+Example: `20240906123045_create_profiles.sql`
+
+### Migration Template
+
+```sql
+-- Migration: Create user profiles table
+-- Purpose: Store extended user information beyond auth.users
+-- Affected: Creates public.profiles table with RLS
+
+-- Create the table
+create table public.profiles (
+  id uuid primary key references auth.users (id) on delete cascade,
+  full_name text,
+  avatar_url text,
+  bio text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Enable RLS (REQUIRED for all tables)
+alter table public.profiles enable row level security;
+
+-- Add table comment
+comment on table public.profiles is 'User profile information extending auth.users.';
+
+-- RLS Policies (one per operation, per role)
+create policy "Users can view all profiles"
+  on public.profiles for select
+  to authenticated
+  using (true);
+
+create policy "Users can update own profile"
+  on public.profiles for update
+  to authenticated
+  using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);
+
+create policy "Users can insert own profile"
+  on public.profiles for insert
+  to authenticated
+  with check ((select auth.uid()) = id);
+```
+
+### RLS Policy Rules
+
+| Operation | USING | WITH CHECK |
+|-----------|-------|------------|
+| SELECT | ✅ Required | ❌ Never |
+| INSERT | ❌ Never | ✅ Required |
+| UPDATE | ✅ Usually | ✅ Required |
+| DELETE | ✅ Required | ❌ Never |
+
+**Important:**
+- Never use `FOR ALL` - create separate policies per operation
+- Always specify role with `TO authenticated` or `TO anon`
+- Use `(select auth.uid())` not just `auth.uid()` for performance
+
+---
+
+## Database Functions
+
+### Function Template
+
+```sql
+create or replace function public.get_user_posts(user_uuid uuid)
+returns setof public.posts
+language plpgsql
+security invoker  -- Default: runs as calling user
+set search_path = ''  -- Security: prevent search_path attacks
+stable  -- Or: immutable, volatile
+as $$
+begin
+  return query
+  select *
+  from public.posts
+  where public.posts.user_id = user_uuid
+  order by public.posts.created_at desc;
+end;
+$$;
+```
+
+### Security Settings
+
+| Setting | When to Use |
+|---------|-------------|
+| `security invoker` | Default - function runs with caller's permissions |
+| `security definer` | When function needs elevated permissions (document why) |
+| `set search_path = ''` | Always - prevents schema injection attacks |
+
+### Volatility Categories
+
+| Category | Use When |
+|----------|----------|
+| `immutable` | Same inputs always return same outputs (pure functions) |
+| `stable` | Returns same results within a single query (reads data) |
+| `volatile` | May return different results, has side effects (default) |
+
+### Trigger Function Example
+
+```sql
+-- Function to auto-update updated_at timestamp
+create or replace function public.handle_updated_at()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+-- Attach trigger to table
+create trigger on_profile_updated
+  before update on public.profiles
+  for each row
+  execute function public.handle_updated_at();
+```
+
+---
+
+## Declarative Schema (Optional)
+
+If using declarative schema management:
+
+1. Define schemas in `supabase/schemas/*.sql`
+2. Generate migrations via diff:
+   ```bash
+   supabase stop
+   supabase db diff -f migration_name
+   ```
+
+### Known Limitations
+Schema diff doesn't track:
+- DML statements (insert, update, delete)
+- View ownership and grants
+- RLS policy alterations
+- Comments and partitions
+
+For these, use manual migrations in `supabase/migrations/`.
+
+---
+
+## Quick Reference
+
+### Common Patterns
+
+```sql
+-- Soft delete
+alter table public.posts add column deleted_at timestamptz;
+
+-- Full-text search index
+create index posts_search_idx on public.posts 
+  using gin(to_tsvector('english', title || ' ' || content));
+
+-- Composite foreign key
+create table public.order_items (
+  order_id bigint references public.orders(id),
+  product_id bigint references public.products(id),
+  primary key (order_id, product_id)
+);
+
+-- Check constraint
+alter table public.products 
+  add constraint positive_price check (price > 0);
+```
+
+### Performance Tips
+- Add indexes for columns used in RLS policies
+- Use `(select auth.uid())` in policies (cached per statement)
+- Avoid joins in RLS - use `IN` with subqueries instead

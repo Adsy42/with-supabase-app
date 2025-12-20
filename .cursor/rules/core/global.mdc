@@ -1,6 +1,6 @@
 ---
 description: Global coding standards and TypeScript best practices
-globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: true
 ---
 
 # Global Development Rules

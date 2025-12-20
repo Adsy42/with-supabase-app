@@ -1,0 +1,534 @@
+---
+description: UI component patterns with shadcn/ui, Tailwind CSS, Framer Motion, and accessibility for Orderly legal tech platform
+globs: ["components/**/*.tsx", "app/**/*.tsx"]
+---
+
+# UI Components Guide
+
+This guide covers component patterns for the Orderly legal tech platform using shadcn/ui, Tailwind CSS, and Framer Motion.
+
+**Related Rules:**
+- `design-system.mdc` - Color tokens, typography, spacing
+- `legal-tech-patterns.mdc` - Harvey/Legora-inspired components
+- `framer-motion.mdc` - Animation patterns and variants
+
+---
+
+## Component Architecture
+
+### Use shadcn/ui Primitives
+
+```typescript
+// ✅ Import from your local ui folder
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+
+// ❌ Don't import directly from radix
+import * as Dialog from '@radix-ui/react-dialog'; // Use shadcn wrapper instead
+```
+
+### Component Structure
+
+```
+components/
+├── ui/                    # shadcn/ui primitives (customize sparingly)
+│   ├── button.tsx
+│   ├── input.tsx
+│   ├── card.tsx
+│   └── ...
+├── motion/                # Framer Motion wrappers
+│   ├── motion-card.tsx
+│   ├── motion-section.tsx
+│   └── stagger-grid.tsx
+├── brand/                 # Brand-specific components
+│   ├── logo.tsx
+│   └── gradient-background.tsx
+├── layout/                # Layout components
+│   ├── header.tsx
+│   ├── footer.tsx
+│   ├── sidebar.tsx
+│   └── dashboard-layout.tsx
+├── marketing/             # Marketing page components
+│   ├── hero-section.tsx
+│   ├── feature-card.tsx
+│   ├── testimonial-card.tsx
+│   └── logo-carousel.tsx
+└── [feature]/             # Feature-specific components
+    └── document-card.tsx
+```
+
+---
+
+## Styling with Tailwind & Design System
+
+### Use the `cn()` Helper
+
+```typescript
+import { cn } from '@/lib/utils';
+
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'primary' | 'secondary' | 'ghost' | 'gradient';
+  size?: 'sm' | 'md' | 'lg';
+}
+
+export function Button({ 
+  className, 
+  variant = 'primary', 
+  size = 'md',
+  ...props 
+}: ButtonProps) {
+  return (
+    <button
+      className={cn(
+        // Base styles
+        'inline-flex items-center justify-center rounded-md font-medium transition-all',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'disabled:pointer-events-none disabled:opacity-50',
+        
+        // Variant styles (using design system tokens)
+        {
+          'bg-primary text-primary-foreground hover:bg-primary/90': variant === 'primary',
+          'bg-secondary text-secondary-foreground hover:bg-secondary/80': variant === 'secondary',
+          'hover:bg-accent hover:text-accent-foreground': variant === 'ghost',
+          'bg-gradient-brand text-white hover:opacity-90': variant === 'gradient',
+        },
+        
+        // Size styles
+        {
+          'h-8 px-3 text-sm': size === 'sm',
+          'h-10 px-4': size === 'md',
+          'h-12 px-8 text-lg': size === 'lg',
+        },
+        
+        className
+      )}
+      {...props}
+    />
+  );
+}
+```
+
+### Use Design System Tokens
+
+```typescript
+// ✅ Use semantic color tokens from design-system.mdc
+<div className="bg-background text-foreground">
+  <h1 className="text-foreground">Title</h1>
+  <p className="text-muted-foreground">Description</p>
+</div>
+
+// ✅ Use brand colors for emphasis
+<div className="bg-primary text-primary-foreground">
+<a className="text-accent hover:text-accent/80">
+
+// ✅ Use brand gradient for heroes/CTAs
+<section className="bg-gradient-brand">
+<button className="bg-gradient-brand text-white">
+
+// ❌ Don't use raw color values
+<div className="bg-blue-600">
+<div style={{ background: '#1E3A8A' }}>
+```
+
+### Dark Mode Support
+
+```typescript
+// ✅ Use CSS variables - automatically adapts to theme
+<div className="bg-background text-foreground">
+<div className="bg-card border-border">
+
+// ✅ Dark-specific overrides when needed
+<Card className="shadow-subtle dark:shadow-none dark:border">
+
+// ✅ Gradients work in both modes
+<section className="bg-gradient-brand">
+```
+
+### Responsive Design
+
+```typescript
+// Mobile-first approach
+<div className="
+  grid 
+  grid-cols-1        // Mobile: 1 column
+  md:grid-cols-2     // Tablet: 2 columns  
+  lg:grid-cols-3     // Desktop: 3 columns
+  gap-6
+">
+  {items.map(item => <FeatureCard key={item.id} {...item} />)}
+</div>
+
+// Responsive spacing (generous whitespace)
+<section className="py-16 md:py-24 px-4 md:px-6">
+
+// Hide/show based on screen size
+<nav className="hidden md:flex">Desktop nav</nav>
+<nav className="flex md:hidden">Mobile nav</nav>
+```
+
+---
+
+## Framer Motion Integration
+
+### Animated Cards
+
+```typescript
+'use client';
+
+import { motion } from 'framer-motion';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+interface FeatureCardProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  index?: number;
+}
+
+export function FeatureCard({ icon, title, description, index = 0 }: FeatureCardProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.5, delay: index * 0.1 }}
+      whileHover={{ y: -4 }}
+    >
+      <Card className="h-full shadow-subtle hover:shadow-elevated transition-shadow">
+        <CardHeader>
+          <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+            {icon}
+          </div>
+          <CardTitle className="mt-4">{title}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">{description}</p>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+```
+
+### Staggered Lists
+
+```typescript
+'use client';
+
+import { motion } from 'framer-motion';
+import { staggerContainerVariants, staggerItemVariants } from '@/lib/motion-variants';
+
+export function FeatureGrid({ features }) {
+  return (
+    <motion.div
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true }}
+      variants={staggerContainerVariants}
+      className="grid gap-6 md:grid-cols-3"
+    >
+      {features.map((feature) => (
+        <motion.div key={feature.id} variants={staggerItemVariants}>
+          <FeatureCard {...feature} />
+        </motion.div>
+      ))}
+    </motion.div>
+  );
+}
+```
+
+### Button with Micro-interaction
+
+```typescript
+'use client';
+
+import { motion } from 'framer-motion';
+import { Button } from '@/components/ui/button';
+
+export function AnimatedButton({ children, ...props }) {
+  return (
+    <motion.div
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.15 }}
+    >
+      <Button {...props}>{children}</Button>
+    </motion.div>
+  );
+}
+```
+
+---
+
+## Accessibility (a11y)
+
+### Semantic HTML
+
+```typescript
+// ✅ Use semantic elements
+<header>...</header>
+<nav>...</nav>
+<main>...</main>
+<article>...</article>
+<aside>...</aside>
+<footer>...</footer>
+
+// ❌ Don't use divs for everything
+<div className="header">...</div>
+```
+
+### ARIA Labels
+
+```typescript
+// ✅ Add labels for interactive elements
+<button aria-label="Close dialog">
+  <XIcon />
+</button>
+
+<input 
+  aria-label="Search documents"
+  aria-describedby="search-hint"
+  placeholder="Search..."
+/>
+<p id="search-hint" className="sr-only">
+  Enter keywords to search legal documents
+</p>
+
+// ✅ For icon-only buttons
+<Button aria-label="Delete document" size="icon">
+  <TrashIcon className="h-4 w-4" />
+</Button>
+```
+
+### Keyboard Navigation
+
+```typescript
+// ✅ Use native interactive elements
+<button onClick={handleClick}>Interactive element</button>
+
+// ✅ If you must use div, add proper attributes
+<div 
+  role="button"
+  tabIndex={0}
+  onClick={handleClick}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      handleClick();
+    }
+  }}
+>
+  Interactive element
+</div>
+```
+
+### Reduced Motion
+
+```typescript
+'use client';
+
+import { motion, useReducedMotion } from 'framer-motion';
+
+export function AccessibleCard({ children }) {
+  const shouldReduceMotion = useReducedMotion();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: shouldReduceMotion ? 0 : 0.5 }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+```
+
+---
+
+## Form Components
+
+### Form with Server Action
+
+```typescript
+'use client';
+
+import { useActionState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { createDocument } from '@/app/actions';
+
+export function CreateDocumentForm() {
+  const [state, action, isPending] = useActionState(createDocument, null);
+  
+  return (
+    <form action={action} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="title">Document Title</Label>
+        <Input 
+          id="title"
+          name="title" 
+          required
+          aria-describedby={state?.error ? 'title-error' : undefined}
+        />
+        {state?.error && (
+          <p id="title-error" className="text-sm text-destructive">
+            {state.error}
+          </p>
+        )}
+      </div>
+      
+      <Button type="submit" disabled={isPending}>
+        {isPending ? 'Creating...' : 'Create Document'}
+      </Button>
+    </form>
+  );
+}
+```
+
+### Loading States with Framer Motion
+
+```typescript
+'use client';
+
+import { motion } from 'framer-motion';
+
+export function DocumentCardSkeleton() {
+  return (
+    <div className="rounded-lg border border-border p-4">
+      <div className="flex items-start gap-4">
+        <motion.div
+          className="h-10 w-10 rounded-lg bg-muted"
+          animate={{ opacity: [0.5, 1, 0.5] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+        />
+        <div className="flex-1 space-y-2">
+          <motion.div
+            className="h-4 w-3/4 rounded bg-muted"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1.5, repeat: Infinity, delay: 0.1 }}
+          />
+          <motion.div
+            className="h-3 w-1/2 rounded bg-muted"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+## Common shadcn/ui Patterns
+
+### Card Component
+
+```typescript
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+
+export function DocumentCard({ document }) {
+  return (
+    <Card className="shadow-subtle hover:shadow-elevated transition-shadow">
+      <CardHeader>
+        <CardTitle>{document.title}</CardTitle>
+        <CardDescription>
+          {new Date(document.updatedAt).toLocaleDateString()}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p className="text-muted-foreground line-clamp-3">
+          {document.excerpt}
+        </p>
+      </CardContent>
+      <CardFooter>
+        <Button asChild>
+          <Link href={`/documents/${document.id}`}>Open</Link>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+```
+
+### Modal/Dialog with Animation
+
+```typescript
+'use client';
+
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+
+export function ConfirmDeleteDialog({ onConfirm }) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="destructive">Delete</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Are you sure?</DialogTitle>
+          <DialogDescription>
+            This action cannot be undone. This will permanently delete the document.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex justify-end gap-2 pt-4">
+          <DialogTrigger asChild>
+            <Button variant="outline">Cancel</Button>
+          </DialogTrigger>
+          <Button variant="destructive" onClick={onConfirm}>
+            Delete
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+---
+
+## Quick Checklist
+
+### Design System
+- [ ] Using semantic color tokens (`bg-background`, `text-foreground`, etc.)
+- [ ] Using brand gradient for heroes/CTAs (`bg-gradient-brand`)
+- [ ] Using `shadow-subtle` and `shadow-elevated` for depth
+- [ ] Generous whitespace (`py-16 md:py-24` for sections)
+- [ ] Rounded corners (`rounded-lg` for cards, `rounded-md` for buttons)
+
+### Components
+- [ ] Using shadcn/ui primitives from `@/components/ui`
+- [ ] Using `cn()` helper for conditional classes
+- [ ] Client components marked with `'use client'`
+
+### Animations
+- [ ] Framer Motion for complex animations
+- [ ] `viewport={{ once: true }}` to prevent re-triggering
+- [ ] `useReducedMotion` for accessibility
+- [ ] Stagger animations for lists/grids
+
+### Accessibility
+- [ ] Semantic HTML elements (header, nav, main, etc.)
+- [ ] ARIA labels on icon-only buttons
+- [ ] Keyboard accessible interactive elements
+- [ ] Form labels associated with inputs (`htmlFor`)
+- [ ] Error messages have proper `aria-describedby`
+
+### Responsive
+- [ ] Mobile-first responsive design
+- [ ] Dark mode support via CSS variables
+- [ ] Loading skeletons match content dimensions

@@ -1,0 +1,426 @@
+---
+description: Advanced Next.js App Router patterns - Server Actions, Route Handlers, Parallel Routes, Error Boundaries
+globs: ["app/**/*.ts", "app/**/*.tsx", "app/**/actions.ts", "app/**/action.ts"]
+---
+
+# Next.js Advanced Routing Patterns
+
+## Server Actions
+
+### File Organization
+
+```
+app/
+├── actions.ts           # Shared actions for multiple routes
+└── dashboard/
+    └── action.ts        # Route-specific action
+```
+
+### Basic Server Action
+
+```typescript
+// app/actions.ts
+'use server';
+
+import { revalidatePath } from 'next/cache';
+
+export async function createPost(formData: FormData) {
+  const title = formData.get('title') as string;
+  
+  if (!title) {
+    throw new Error('Title is required');
+  }
+  
+  await db.posts.create({ data: { title } });
+  revalidatePath('/posts');
+  // No return for form actions - returns void
+}
+```
+
+### ⚠️ CRITICAL: Form Action Return Types
+
+**Form actions (`<form action={...}>`) MUST return void:**
+
+```typescript
+// ✅ CORRECT - Form action returns void
+export async function saveForm(formData: FormData) {
+  'use server';
+  const name = formData.get('name') as string;
+  if (!name) throw new Error('Name required');
+  await db.save(name);
+  revalidatePath('/');
+  // No return statement
+}
+
+// ❌ WRONG - Will cause TypeScript error
+export async function saveForm(formData: FormData) {
+  'use server';
+  return { success: true }; // BUILD ERROR!
+}
+```
+
+### With useActionState (When You Need Return Values)
+
+```typescript
+// app/actions.ts
+'use server';
+
+export async function createPost(prevState: unknown, formData: FormData) {
+  const title = formData.get('title') as string;
+  
+  if (!title) {
+    return { error: 'Title required' };
+  }
+  
+  await db.posts.create({ data: { title } });
+  return { success: true, message: 'Created!' };
+}
+
+// app/new-post/page.tsx
+'use client';
+
+import { useActionState } from 'react';
+import { createPost } from '@/app/actions';
+
+export default function NewPost() {
+  const [state, action, isPending] = useActionState(createPost, null);
+  
+  return (
+    <form action={action}>
+      <input name="title" required />
+      <button disabled={isPending}>
+        {isPending ? 'Creating...' : 'Create'}
+      </button>
+      {state?.error && <p className="text-red-500">{state.error}</p>}
+    </form>
+  );
+}
+```
+
+---
+
+## Route Handlers (API Routes)
+
+### Basic Route Handler
+
+```typescript
+// app/api/posts/route.ts
+import { NextRequest } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const page = parseInt(searchParams.get('page') || '1');
+  
+  const posts = await db.posts.findMany({
+    skip: (page - 1) * 10,
+    take: 10,
+  });
+  
+  return Response.json({ data: posts });
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const post = await db.posts.create({ data: body });
+  return Response.json(post, { status: 201 });
+}
+```
+
+### Dynamic Route Handler
+
+```typescript
+// app/api/posts/[id]/route.ts
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const post = await db.posts.findUnique({ where: { id } });
+  
+  if (!post) {
+    return Response.json({ error: 'Not found' }, { status: 404 });
+  }
+  
+  return Response.json(post);
+}
+```
+
+### When to Use Route Handlers vs Server Actions
+
+| Use Case | Solution |
+|----------|----------|
+| Form submissions | Server Action |
+| Data mutations | Server Action |
+| Webhooks (Stripe, etc.) | Route Handler |
+| External API consumers | Route Handler |
+| File uploads (large) | Route Handler |
+
+---
+
+## Error Handling
+
+### Error Boundary
+
+```typescript
+// app/error.tsx
+'use client';
+
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  return (
+    <div className="p-4">
+      <h2>Something went wrong!</h2>
+      <p>{error.message}</p>
+      <button onClick={reset}>Try again</button>
+    </div>
+  );
+}
+```
+
+### Not Found
+
+```typescript
+// app/not-found.tsx
+import Link from 'next/link';
+
+export default function NotFound() {
+  return (
+    <div>
+      <h2>Page Not Found</h2>
+      <Link href="/">Return Home</Link>
+    </div>
+  );
+}
+
+// Trigger programmatically
+import { notFound } from 'next/navigation';
+
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const post = await getPost(id);
+  
+  if (!post) {
+    notFound();
+  }
+  
+  return <div>{post.title}</div>;
+}
+```
+
+### Loading State
+
+```typescript
+// app/dashboard/loading.tsx
+export default function Loading() {
+  return (
+    <div className="animate-pulse">
+      <div className="h-8 bg-gray-200 rounded w-1/4 mb-4" />
+      <div className="h-4 bg-gray-200 rounded w-full mb-2" />
+      <div className="h-4 bg-gray-200 rounded w-3/4" />
+    </div>
+  );
+}
+```
+
+---
+
+## Parallel Routes
+
+Use `@folder` naming to render multiple pages simultaneously.
+
+### Structure
+
+```
+app/
+├── dashboard/
+│   ├── @analytics/
+│   │   └── page.tsx
+│   ├── @team/
+│   │   └── page.tsx
+│   ├── layout.tsx      # Receives slots as props
+│   └── page.tsx
+```
+
+### Layout with Parallel Routes
+
+```typescript
+// app/dashboard/layout.tsx
+export default function DashboardLayout({
+  children,
+  analytics,
+  team,
+}: {
+  children: React.ReactNode;
+  analytics: React.ReactNode;
+  team: React.ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      <div>{analytics}</div>
+      <div>{team}</div>
+      <div className="col-span-2">{children}</div>
+    </div>
+  );
+}
+```
+
+### Default for Unmatched Routes
+
+```typescript
+// app/dashboard/@analytics/default.tsx
+export default function AnalyticsDefault() {
+  return null; // Or fallback UI
+}
+```
+
+---
+
+## Intercepting Routes (Modals)
+
+### Convention
+
+- `(.)` - Same level
+- `(..)` - One level up
+- `(...)` - From root
+
+### Modal Pattern
+
+```
+app/
+├── photos/
+│   └── [id]/
+│       └── page.tsx        # Full page: /photos/123
+├── @modal/
+│   └── (.)photos/
+│       └── [id]/
+│           └── page.tsx    # Modal intercept
+└── layout.tsx
+```
+
+```typescript
+// app/layout.tsx
+export default function Layout({
+  children,
+  modal,
+}: {
+  children: React.ReactNode;
+  modal: React.ReactNode;
+}) {
+  return (
+    <>
+      {children}
+      {modal}
+    </>
+  );
+}
+
+// app/@modal/(.)photos/[id]/page.tsx
+'use client';
+
+import { useRouter } from 'next/navigation';
+
+export default function PhotoModal({ params }: { params: { id: string } }) {
+  const router = useRouter();
+  
+  return (
+    <dialog open onClose={() => router.back()}>
+      <button onClick={() => router.back()}>Close</button>
+      <img src={`/photos/${params.id}.jpg`} alt="Photo" />
+    </dialog>
+  );
+}
+
+// app/@modal/default.tsx
+export default function Default() {
+  return null;
+}
+```
+
+---
+
+## Streaming with Suspense
+
+```typescript
+// app/dashboard/page.tsx
+import { Suspense } from 'react';
+
+export default function Dashboard() {
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      
+      <Suspense fallback={<StatsSkeleton />}>
+        <Stats />
+      </Suspense>
+      
+      <Suspense fallback={<FeedSkeleton />}>
+        <Feed />
+      </Suspense>
+    </div>
+  );
+}
+
+async function Stats() {
+  const data = await fetchStats(); // Slow
+  return <div>{data.total}</div>;
+}
+
+async function Feed() {
+  const items = await fetchFeed(); // Fast
+  return <ul>{items.map(i => <li key={i.id}>{i.title}</li>)}</ul>;
+}
+```
+
+---
+
+## Cookies and Headers
+
+### Reading Cookies (Server Components)
+
+```typescript
+import { cookies } from 'next/headers';
+
+export default async function Page() {
+  const cookieStore = await cookies();
+  const theme = cookieStore.get('theme')?.value || 'light';
+  
+  return <div className={theme}>...</div>;
+}
+```
+
+### Setting Cookies (Server Actions)
+
+```typescript
+'use server';
+
+import { cookies } from 'next/headers';
+
+export async function setTheme(theme: 'light' | 'dark') {
+  const cookieStore = await cookies();
+  cookieStore.set('theme', theme, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 60 * 24 * 365,
+    path: '/',
+  });
+}
+```
+
+---
+
+## Quick Reference
+
+| Pattern | File | Purpose |
+|---------|------|---------|
+| Server Action | `actions.ts` | Form handling, mutations |
+| Route Handler | `route.ts` | API endpoints, webhooks |
+| Error Boundary | `error.tsx` | Error UI (must be 'use client') |
+| Not Found | `not-found.tsx` | 404 page |
+| Loading | `loading.tsx` | Suspense fallback |
+| Parallel Route | `@folder/page.tsx` | Simultaneous rendering |
+| Intercepting | `(.)path/page.tsx` | Modal overlays |

@@ -15,10 +15,10 @@ When reviewing code, check these in order of priority:
 4. **Code Quality** - DRY, readability, conventions
 
 For detailed checks in each area, see:
-- Security → `security-checklist.mdc`
-- Next.js patterns → `nextjs.mdc`
-- Supabase patterns → `supabase.mdc`
-- Performance → `performance.mdc`
+- Security → `core/security-checklist.mdc`
+- Next.js patterns → `nextjs/` folder
+- Supabase patterns → `supabase/` folder
+- Performance → `ui/performance.mdc`
 
 ## Review Response Format
 

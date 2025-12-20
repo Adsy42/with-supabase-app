@@ -1,9 +1,0 @@
----
-description: DEPRECATED - Merged into nextjs.mdc
-globs: []
----
-
-# This file has been merged into nextjs.mdc
-
-All anti-patterns are now integrated into the main Next.js rules file.
-See `.cursor/rules/nextjs.mdc` for the complete guide.
