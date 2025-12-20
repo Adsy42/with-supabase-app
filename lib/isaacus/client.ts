@@ -227,3 +227,4 @@ export async function classify(
 // Export constants
 export { EMBEDDING_DIMENSIONS, IsaacusError };
 
+

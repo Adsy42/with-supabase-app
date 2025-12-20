@@ -196,16 +196,29 @@ export function ChatInterface({
 
   // Handle message submission
   const handleSubmit = React.useCallback(
-    async (content: string) => {
+    async (content: string, files?: File[]) => {
+      // Build message content with file mentions
+      let messageContent = content;
+      if (files && files.length > 0) {
+        const fileNames = files.map((f) => f.name).join(", ");
+        messageContent = content
+          ? `${content}\n\n[Attached: ${fileNames}]`
+          : `[Attached: ${fileNames}]`;
+
+        // TODO: Upload files to Supabase Storage and process for RAG
+        // For now, just mention the files in the message
+        console.log("Files to process:", files);
+      }
+
       // Save user message to database
       try {
-        await saveMessage(conversationId, "user", content);
+        await saveMessage(conversationId, "user", messageContent);
       } catch (err) {
         console.error("Failed to save user message:", err);
       }
 
       // Send to AI using v5 format
-      sendMessage({ text: content });
+      sendMessage({ text: messageContent });
     },
     [conversationId, sendMessage]
   );
@@ -213,7 +226,7 @@ export function ChatInterface({
   // Handle suggestion selection
   const handleSuggestionSelect = React.useCallback(
     (suggestion: { id: string; text: string }) => {
-      handleSubmit(suggestion.text);
+      handleSubmit(suggestion.text, undefined);
     },
     [handleSubmit]
   );
@@ -224,7 +237,7 @@ export function ChatInterface({
       .filter((m) => m.role === "user")
       .pop();
     if (lastUserMessage) {
-      handleSubmit(lastUserMessage.content);
+      handleSubmit(lastUserMessage.content, undefined);
     }
   }, [allMessages, handleSubmit]);
 

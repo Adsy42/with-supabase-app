@@ -95,3 +95,4 @@ export const legalSuggestions: Suggestion[] = [
   { id: "6", text: "Check for compliance" },
 ];
 
+
