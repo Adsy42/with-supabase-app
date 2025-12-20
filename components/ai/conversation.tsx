@@ -2,8 +2,9 @@
 
 /**
  * Conversation Component
- * Auto-scrolling chat container with scroll-to-bottom functionality
+ * Auto-scrolling chat container - ChatGPT/Claude style
  * Based on shadcn.io/ai patterns
+ * @see https://www.shadcn.io/ai
  */
 
 import * as React from "react";
@@ -31,6 +32,10 @@ export function useConversation() {
   return React.useContext(ConversationContext);
 }
 
+/**
+ * Conversation - Main chat container
+ * Clean, full-height layout like ChatGPT
+ */
 export function Conversation({ children, className, ...props }: ConversationProps) {
   const contentRef = React.useRef<HTMLDivElement>(null);
 
@@ -47,7 +52,7 @@ export function Conversation({ children, className, ...props }: ConversationProp
     <ConversationContext.Provider value={{ scrollToBottom }}>
       <div
         className={cn(
-          "flex h-full flex-col rounded-xl border border-border/50 bg-card shadow-elevated",
+          "flex h-full flex-col bg-background",
           className
         )}
         {...props}
@@ -65,6 +70,9 @@ export function Conversation({ children, className, ...props }: ConversationProp
   );
 }
 
+/**
+ * ConversationContent - Scrollable message area
+ */
 export const ConversationContent = React.forwardRef<
   HTMLDivElement,
   ConversationContentProps
@@ -73,25 +81,39 @@ export const ConversationContent = React.forwardRef<
     <div
       ref={ref}
       className={cn(
-        "flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide",
+        "flex-1 overflow-y-auto",
+        // Custom scrollbar styling
+        "scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent",
         className
       )}
       {...props}
     >
-      {children}
+      {/* Centered content container with max-width */}
+      <div className="mx-auto max-w-3xl">
+        {children}
+      </div>
     </div>
   );
 });
 ConversationContent.displayName = "ConversationContent";
 
+/**
+ * ConversationInput - Fixed input area at bottom
+ */
 export function ConversationInput({ children, className, ...props }: ConversationInputProps) {
   return (
     <div
-      className={cn("border-t border-border p-4", className)}
+      className={cn(
+        "border-t border-border/50 bg-background",
+        "px-4 py-4",
+        className
+      )}
       {...props}
     >
-      {children}
+      {/* Centered input container */}
+      <div className="mx-auto max-w-3xl">
+        {children}
+      </div>
     </div>
   );
 }
-

@@ -17,6 +17,7 @@ export {
   MessageContent,
   MessageAvatar,
   MessageList,
+  MessageBubble,
 } from "./message";
 
 export { Response } from "./response";
@@ -29,6 +30,7 @@ export {
   Spinner,
   SkeletonShimmer,
   MessageSkeleton,
+  ThinkingText,
 } from "./loader";
 
 // Action components
