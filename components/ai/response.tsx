@@ -122,11 +122,13 @@ function parseMarkdown(content: string): React.ReactNode[] {
       flushList();
       const level = headerMatch[1].length as 1 | 2 | 3 | 4 | 5 | 6;
       const text = headerMatch[2];
-      const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements;
+      const HeadingTag = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
       elements.push(
-        <HeadingTag key={`h-${elements.length}`}>
-          {parseInline(text)}
-        </HeadingTag>
+        React.createElement(
+          HeadingTag,
+          { key: `h-${elements.length}` },
+          parseInline(text)
+        )
       );
       i++;
       continue;
