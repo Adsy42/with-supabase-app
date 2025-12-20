@@ -59,3 +59,4 @@ jobs:
             } else {
               console.log(`✅ Branch name '${branch}' is valid`);
             }
+
