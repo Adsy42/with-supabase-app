@@ -1,6 +1,7 @@
 /**
  * Chat API Route
- * Streaming chat with RAG context using Vercel AI SDK v5
+ * Streaming chat with RAG context and mode-specific prompts
+ * Using Vercel AI SDK v5
  */
 
 import { streamText, convertToModelMessages } from "ai";
@@ -10,6 +11,7 @@ import { getModel, type ModelMode } from "@/lib/ai/router";
 import { buildSystemPrompt } from "@/lib/ai/prompts";
 import { searchDocuments } from "@/lib/rag/search";
 import { saveMessage } from "@/actions/conversations";
+import { type CounselMode, getModeConfig, detectSuggestedMode } from "@/lib/ai/modes";
 
 export const maxDuration = 60; // Allow longer responses for legal content
 
@@ -37,12 +39,16 @@ export async function POST(req: Request) {
       matterId,
       modelPreference,
       mode = "auto_optimize",
+      counselMode = "general",
+      autoDetectMode = false,
     } = body as {
       messages: UIMessage[];
       conversationId?: string;
       matterId?: string;
       modelPreference?: string;
       mode?: ModelMode;
+      counselMode?: CounselMode;
+      autoDetectMode?: boolean;
     };
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -59,6 +65,20 @@ export async function POST(req: Request) {
         ?.filter((part): part is { type: "text"; text: string } => part.type === "text")
         .map((part) => part.text)
         .join(" ") ?? "";
+
+    // Determine the counsel mode to use
+    let activeCounselMode: CounselMode = counselMode;
+    
+    // Auto-detect mode from query if enabled and mode is general
+    if (autoDetectMode && counselMode === "general" && userQuery) {
+      const suggestedMode = detectSuggestedMode(userQuery);
+      if (suggestedMode !== "general") {
+        activeCounselMode = suggestedMode;
+      }
+    }
+
+    // Get mode config for model tier recommendation
+    const modeConfig = getModeConfig(activeCounselMode);
 
     // Build RAG context if user has documents
     let ragContext: { documents: string } | undefined;
@@ -81,11 +101,16 @@ export async function POST(req: Request) {
     }
 
     // Select model based on preference and mode
+    // If no preference, use the mode's recommended tier
     const validMode: ModelMode = mode === "user_choice" ? "user_choice" : "auto_optimize";
-    const model = getModel(modelPreference ?? null, validMode, userQuery);
+    const model = getModel(
+      modelPreference ?? null,
+      validMode,
+      userQuery
+    );
 
-    // Build system prompt with RAG context
-    const systemPrompt = buildSystemPrompt(ragContext);
+    // Build system prompt with mode and RAG context
+    const systemPrompt = buildSystemPrompt(activeCounselMode, ragContext);
 
     // Convert UI messages to model messages
     const modelMessages = convertToModelMessages(messages);
@@ -115,7 +140,19 @@ export async function POST(req: Request) {
       },
     });
 
-    return result.toUIMessageStreamResponse();
+    // Return response with mode metadata in headers
+    const response = result.toUIMessageStreamResponse();
+    
+    // Add custom headers with mode info (for client-side mode detection feedback)
+    const headers = new Headers(response.headers);
+    headers.set("X-Counsel-Mode", activeCounselMode);
+    headers.set("X-Mode-Name", modeConfig.name);
+    
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   } catch (error) {
     console.error("Chat API error:", error);
 
@@ -127,4 +164,3 @@ export async function POST(req: Request) {
     });
   }
 }
-

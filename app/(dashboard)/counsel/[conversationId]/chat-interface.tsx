@@ -7,9 +7,13 @@
  * 
  * Features:
  * - Stop generation mid-stream
- * - Edit user messages
- * - Branch navigation for regenerated responses
+ * - Edit user messages (reverts history to that point)
+ * - Regenerate responses
  * - Message parts handling (text, tool-call, reasoning, sources)
+ * 
+ * ChatGPT-style edit behavior:
+ * When you edit a message, all messages AFTER that point are removed
+ * and the conversation continues from the edited message.
  */
 
 import * as React from "react";
@@ -33,8 +37,6 @@ import {
   // Action components
   Actions,
   StopButton,
-  // Navigation
-  Branch,
   // Tool & reasoning
   Tool,
   Reasoning,
@@ -87,15 +89,13 @@ interface SourcePart {
 
 type MessagePart = TextPart | ToolCallPart | ToolResultPart | ReasoningPart | SourcePart;
 
-// Message type for combined messages with branch support
-type CombinedMessage = {
+// Message type for display
+type DisplayMessage = {
   id: string;
   role: "user" | "assistant";
   parts: MessagePart[];
   content: string;
   createdAt: Date;
-  branches?: string[]; // IDs of alternative responses
-  activeBranch?: number; // Current branch index
 };
 
 interface ChatInterfaceProps {
@@ -113,6 +113,18 @@ export function ChatInterface({
   const abortControllerRef = React.useRef<AbortController | null>(null);
   const [showSuggestions, setShowSuggestions] = React.useState(true);
   const [editingMessageId, setEditingMessageId] = React.useState<string | null>(null);
+  
+  // LOCAL message state - this is the single source of truth for visible messages
+  // Initialize from DB messages, then manage locally
+  const [localMessages, setLocalMessages] = React.useState<DisplayMessage[]>(() =>
+    initialMessages.map((msg) => ({
+      id: msg.id,
+      role: msg.role as "user" | "assistant",
+      parts: [{ type: "text" as const, text: msg.content }],
+      content: msg.content,
+      createdAt: new Date(msg.created_at),
+    }))
+  );
 
   // Create transport with API endpoint and extra body params
   const transport = React.useMemo(
@@ -132,7 +144,7 @@ export function ChatInterface({
   const {
     messages: aiMessages,
     sendMessage,
-    setMessages,
+    setMessages: setAiMessages,
     status,
     error,
   } = useChat({
@@ -142,49 +154,58 @@ export function ChatInterface({
   const isLoading = status === "streaming" || status === "submitted";
   const isStreaming = status === "streaming";
 
-  // Combine initial messages from DB with AI SDK messages
-  const allMessages = React.useMemo(() => {
-    // Convert DB messages to UI format
-    const dbMessages: CombinedMessage[] = initialMessages.map((msg) => ({
-      id: msg.id,
-      role: msg.role as "user" | "assistant",
-      parts: [{ type: "text" as const, text: msg.content }],
-      content: msg.content,
-      createdAt: new Date(msg.created_at),
-    }));
+  // Sync AI SDK messages to local state (for new messages during streaming)
+  React.useEffect(() => {
+    if (aiMessages.length > 0) {
+      // Get the latest AI messages that aren't in local state
+      const localIds = new Set(localMessages.map((m) => m.id));
+      
+      const newAiMessages: DisplayMessage[] = aiMessages
+        .filter((m) => !localIds.has(m.id))
+        .map((msg: UIMessage) => {
+          const textContent =
+            msg.parts
+              ?.filter((part): part is TextPart => part.type === "text")
+              .map((part) => part.text)
+              .join("") ?? "";
 
-    // Convert AI SDK messages - preserve parts structure
-    const newMessages: CombinedMessage[] = aiMessages.map((msg: UIMessage) => {
-      // Extract text content for compatibility
-      const textContent =
-        msg.parts
-          ?.filter((part): part is TextPart => part.type === "text")
-          .map((part) => part.text)
-          .join("") ?? "";
+          return {
+            id: msg.id,
+            role: msg.role as "user" | "assistant",
+            parts: (msg.parts as MessagePart[]) ?? [{ type: "text" as const, text: textContent }],
+            content: textContent,
+            createdAt: new Date(),
+          };
+        });
 
-      return {
-        id: msg.id,
-        role: msg.role as "user" | "assistant",
-        parts: (msg.parts as MessagePart[]) ?? [{ type: "text" as const, text: textContent }],
-        content: textContent,
-        createdAt: new Date(),
-      };
-    });
+      if (newAiMessages.length > 0) {
+        setLocalMessages((prev) => [...prev, ...newAiMessages]);
+      }
 
-    // Combine, removing duplicates by ID
-    const messageMap = new Map<string, CombinedMessage>();
-    for (const msg of dbMessages) {
-      messageMap.set(msg.id, msg);
+      // Update streaming message content in real-time
+      const lastAiMessage = aiMessages[aiMessages.length - 1];
+      if (lastAiMessage && isStreaming) {
+        setLocalMessages((prev) => {
+          const lastIndex = prev.findIndex((m) => m.id === lastAiMessage.id);
+          if (lastIndex !== -1) {
+            const updated = [...prev];
+            const textContent =
+              lastAiMessage.parts
+                ?.filter((part): part is TextPart => part.type === "text")
+                .map((part) => part.text)
+                .join("") ?? "";
+            updated[lastIndex] = {
+              ...updated[lastIndex],
+              parts: (lastAiMessage.parts as MessagePart[]) ?? [{ type: "text" as const, text: textContent }],
+              content: textContent,
+            };
+            return updated;
+          }
+          return prev;
+        });
+      }
     }
-    for (const msg of newMessages) {
-      messageMap.set(msg.id, msg);
-    }
-
-    // Sort by creation time
-    return Array.from(messageMap.values()).sort(
-      (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
-    );
-  }, [initialMessages, aiMessages]);
+  }, [aiMessages, localMessages, isStreaming]);
 
   // Auto-scroll to bottom when new messages arrive
   React.useEffect(() => {
@@ -194,14 +215,14 @@ export function ChatInterface({
         behavior: "smooth",
       });
     }
-  }, [allMessages.length, isLoading]);
+  }, [localMessages.length, isLoading]);
 
   // Hide suggestions after first message
   React.useEffect(() => {
-    if (allMessages.length > 0) {
+    if (localMessages.length > 0) {
       setShowSuggestions(false);
     }
-  }, [allMessages.length]);
+  }, [localMessages.length]);
 
   // Handle message submission
   const handleSubmit = React.useCallback(
@@ -243,30 +264,58 @@ export function ChatInterface({
     // Note: AI SDK v5 may not support stop directly, this is a workaround
   }, []);
 
-  // Handle edit message - removes messages after edited one and resubmits
+  // Handle edit message - ChatGPT style: removes ALL messages after this point
   const handleEditMessage = React.useCallback(
     async (messageId: string, newContent: string) => {
       // Find the message index
-      const messageIndex = allMessages.findIndex((m) => m.id === messageId);
+      const messageIndex = localMessages.findIndex((m) => m.id === messageId);
       if (messageIndex === -1) return;
 
-      // Get messages before this one (keep them)
-      const messagesBeforeEdit = allMessages.slice(0, messageIndex);
-
-      // Update the AI SDK messages to only include messages before the edit
-      const aiMessagesToKeep = aiMessages.filter((m) =>
-        messagesBeforeEdit.some((kept) => kept.id === m.id)
-      );
-      setMessages(aiMessagesToKeep);
+      // TRUNCATE: Keep only messages BEFORE the edited message
+      const messagesBeforeEdit = localMessages.slice(0, messageIndex);
+      
+      // Update local state immediately - this is the key!
+      setLocalMessages(messagesBeforeEdit);
+      
+      // Clear ALL AI SDK messages since we're restarting from this point
+      setAiMessages([]);
 
       // Clear editing state
       setEditingMessageId(null);
 
-      // Submit the edited message
+      // Small delay to ensure state is cleared before submitting
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Submit the edited message (this will add it as a new message)
       await handleSubmit(newContent, undefined);
     },
-    [allMessages, aiMessages, setMessages, handleSubmit]
+    [localMessages, setAiMessages, handleSubmit]
   );
+
+  // Handle regenerate - removes last assistant message and re-sends user message
+  const handleRegenerate = React.useCallback(async () => {
+    // Find the last user message
+    const lastUserIndex = localMessages.map((m) => m.role).lastIndexOf("user");
+    if (lastUserIndex === -1) return;
+
+    const lastUserMessage = localMessages[lastUserIndex];
+    
+    // Keep only messages up to and including the last user message
+    // (removes the assistant response that came after)
+    const messagesUpToUser = localMessages.slice(0, lastUserIndex + 1);
+    
+    // Update local state - keep user message, remove assistant response
+    setLocalMessages(messagesUpToUser);
+    
+    // Clear AI SDK state
+    setAiMessages([]);
+
+    // Small delay to ensure state is cleared
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Re-send the user's message to get a new response
+    sendMessage({ text: lastUserMessage.content });
+  }, [localMessages, setAiMessages, sendMessage]);
 
   // Handle suggestion selection
   const handleSuggestionSelect = React.useCallback(
@@ -276,29 +325,14 @@ export function ChatInterface({
     [handleSubmit]
   );
 
-  // Handle regenerate - re-send last user message
-  const handleRegenerate = React.useCallback(() => {
-    const lastUserMessage = allMessages
-      .filter((m) => m.role === "user")
-      .pop();
-    if (lastUserMessage) {
-      // Remove the last assistant message
-      const aiMessagesWithoutLast = aiMessages.slice(0, -1);
-      setMessages(aiMessagesWithoutLast);
-
-      // Re-submit the user message
-      handleSubmit(lastUserMessage.content, undefined);
-    }
-  }, [allMessages, aiMessages, setMessages, handleSubmit]);
-
   return (
     <Conversation className="flex-1">
       <ConversationContent ref={scrollRef}>
         <AnimatePresence initial={false} mode="popLayout">
-          {allMessages.length === 0 ? (
+          {localMessages.length === 0 ? (
             <EmptyChat key="empty" />
           ) : (
-            allMessages.map((message, messageIndex) => (
+            localMessages.map((message, messageIndex) => (
               <React.Fragment key={message.id}>
                 {/* User messages with edit capability */}
                 {message.role === "user" ? (
@@ -338,26 +372,12 @@ export function ChatInterface({
                           part={part}
                           isStreaming={
                             isStreaming &&
-                            messageIndex === allMessages.length - 1 &&
+                            messageIndex === localMessages.length - 1 &&
                             partIndex === message.parts.length - 1
                           }
                         />
                       ))}
                     </MessageContent>
-
-                    {/* Branch navigation if multiple responses exist */}
-                    {message.branches && message.branches.length > 1 && (
-                      <div className="mt-2">
-                        <Branch
-                          total={message.branches.length}
-                          current={message.activeBranch ?? 0}
-                          onNavigate={(index) => {
-                            // TODO: Implement branch navigation
-                            console.log("Navigate to branch:", index);
-                          }}
-                        />
-                      </div>
-                    )}
 
                     {/* Actions for assistant messages (not while streaming) */}
                     {!isStreaming && (
@@ -365,11 +385,11 @@ export function ChatInterface({
                         <Actions
                           content={message.content}
                           onRegenerate={
-                            messageIndex === allMessages.length - 1
+                            messageIndex === localMessages.length - 1
                               ? handleRegenerate
                               : undefined
                           }
-                          showRegenerate={messageIndex === allMessages.length - 1}
+                          showRegenerate={messageIndex === localMessages.length - 1}
                         />
                       </div>
                     )}
@@ -407,7 +427,7 @@ export function ChatInterface({
 
       <ConversationInput>
         {/* Suggestions for empty chat */}
-        {showSuggestions && allMessages.length === 0 && (
+        {showSuggestions && localMessages.length === 0 && (
           <div className="mb-4">
             <Suggestions
               suggestions={legalSuggestions}
