@@ -322,6 +322,12 @@ CREATE POLICY "Users can delete their own document chunks"
 -- VECTOR SEARCH FUNCTION
 -- Match document chunks by vector similarity (for LangChain SupabaseVectorStore)
 -- ============================================================================
+
+-- Drop existing function if it exists with different signature
+DROP FUNCTION IF EXISTS public.match_document_chunks(vector, integer, uuid, uuid, double precision);
+DROP FUNCTION IF EXISTS public.match_document_chunks(vector, integer, uuid, uuid, float);
+DROP FUNCTION IF EXISTS public.match_document_chunks(vector(1024), integer, uuid, uuid, double precision);
+
 CREATE OR REPLACE FUNCTION public.match_document_chunks(
   query_embedding vector(1024),
   match_count INTEGER DEFAULT 10,
