@@ -1,6 +1,6 @@
 /**
  * RAG Search Pipeline
- * Vector search + Isaacus reranking for document retrieval
+ * Vector search + Isaacus reranking + extractive QA for document retrieval
  */
 
 import { createClient } from "@/lib/supabase/server";
@@ -9,6 +9,13 @@ import {
   rerank,
   isIsaacusConfigured,
 } from "@/lib/isaacus/client";
+import {
+  extractCitations,
+  formatCitationsForLLM,
+  buildContextWithCitations,
+  type VerifiedCitation,
+  type CitationResult,
+} from "./citations";
 
 export interface SearchResult {
   id: string;
@@ -21,9 +28,34 @@ export interface SearchResult {
 }
 
 export interface SearchContext {
+  /** Formatted document context for LLM */
   documents: string;
+  /** Raw search results */
   results: SearchResult[];
+  /** Original query */
   query: string;
+  /** Verified citations with exact quotes (when extractive QA is enabled) */
+  citations?: VerifiedCitation[];
+  /** Formatted citations for LLM context */
+  citationsContext?: string;
+  /** Whether citations are verified by Isaacus Reader */
+  citationsVerified?: boolean;
+}
+
+/**
+ * Search options for RAG pipeline
+ */
+export interface SearchOptions {
+  /** Number of results to retrieve for reranking (default 20) */
+  topK?: number;
+  /** Minimum similarity threshold (default 0.5) */
+  threshold?: number;
+  /** Number of results after reranking (default 5) */
+  rerankTopK?: number;
+  /** Enable extractive QA for verified citations (default false) */
+  extractCitations?: boolean;
+  /** Maximum number of citations to extract (default 5) */
+  maxCitations?: number;
 }
 
 /**
@@ -31,22 +63,21 @@ export interface SearchContext {
  * 1. Embed query with Isaacus
  * 2. Vector search in pgvector
  * 3. Rerank with Isaacus cross-encoder
- * 4. Build context for LLM
+ * 4. (Optional) Extract citations with Isaacus Reader
+ * 5. Build context for LLM
  */
 export async function searchDocuments(
   query: string,
   userId: string,
   matterId?: string,
-  options?: {
-    topK?: number;
-    threshold?: number;
-    rerankTopK?: number;
-  }
+  options?: SearchOptions
 ): Promise<SearchContext> {
   const {
     topK = 20, // Retrieve more for reranking
     threshold = 0.5,
     rerankTopK = 5, // Final number after reranking
+    extractCitations: shouldExtractCitations = false,
+    maxCitations = 5,
   } = options ?? {};
 
   // If Isaacus is not configured, fall back to basic search
@@ -120,13 +151,34 @@ export async function searchDocuments(
       results = results.slice(0, rerankTopK);
     }
 
-    // Step 4: Build context string
-    const documents = buildContext(results);
+    // Step 4: Extract citations with Isaacus Reader (optional)
+    let citationResult: CitationResult | undefined;
+    if (shouldExtractCitations) {
+      try {
+        citationResult = await extractCitations(query, results, maxCitations);
+      } catch (citationError) {
+        console.error("Citation extraction error:", citationError);
+        // Continue without citations
+      }
+    }
+
+    // Step 5: Build context string
+    const documents = citationResult?.citations.length
+      ? buildContextWithCitations(results, citationResult.citations)
+      : buildContext(results);
+
+    // Build citations context for LLM
+    const citationsContext = citationResult?.citations.length
+      ? formatCitationsForLLM(citationResult.citations)
+      : undefined;
 
     return {
       documents,
       results,
       query,
+      citations: citationResult?.citations,
+      citationsContext,
+      citationsVerified: citationResult?.verified,
     };
   } catch (error) {
     console.error("RAG search error:", error);

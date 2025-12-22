@@ -2,12 +2,14 @@
  * Isaacus API Client
  * Australian-first legal AI capabilities using Kanon-2 models
  * https://isaacus.com
+ * API Reference: https://docs.isaacus.com/api-reference
  *
  * Models:
  * - kanon-2-embedder: 1792-dimension embeddings for legal text
  * - kanon-2-reranker: Cross-encoder reranking
  * - kanon-2-reader: Extractive question answering
  * - kanon-2-classifier: Zero-shot text classification
+ * - kanon-universal-classifier: IQL-powered universal classification
  */
 
 const ISAACUS_API_URL = "https://api.isaacus.com/v1";
@@ -16,7 +18,29 @@ const EMBEDDING_DIMENSIONS = 1792;
 // Maximum batch size for embeddings API
 const MAX_BATCH_SIZE = 32;
 
+/**
+ * Embedding task types for optimal retrieval
+ * @see https://docs.isaacus.com/quickstart
+ */
+type EmbeddingTask = "retrieval/document" | "retrieval/query";
+
+interface EmbeddingResult {
+  embedding: number[];
+  index: number;
+}
+
 interface EmbeddingResponse {
+  embeddings: EmbeddingResult[];
+  usage: {
+    input_tokens: number;
+    total_tokens?: number;
+  };
+}
+
+/**
+ * Legacy response format (for backwards compatibility)
+ */
+interface LegacyEmbeddingResponse {
   embeddings: number[][];
   usage: {
     prompt_tokens: number;
@@ -128,7 +152,8 @@ async function request<T>(
 
 /**
  * Embed documents for storage/retrieval
- * Uses task_type: "retrieval_document" for document embeddings
+ * Uses task: "retrieval/document" for document embeddings
+ * @see https://docs.isaacus.com/quickstart
  */
 export async function embedDocuments(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) {
@@ -141,13 +166,28 @@ export async function embedDocuments(texts: string[]): Promise<number[][]> {
   for (let i = 0; i < texts.length; i += MAX_BATCH_SIZE) {
     const batch = texts.slice(i, i + MAX_BATCH_SIZE);
 
-    const response = await request<EmbeddingResponse>("/embed", {
-      model: "kanon-2-embedder",
-      input: batch,
-      task_type: "retrieval_document",
-    });
+    // Try official SDK format first, fall back to legacy
+    try {
+      const response = await request<EmbeddingResponse>("/embeddings", {
+        model: "kanon-2-embedder",
+        texts: batch,
+        task: "retrieval/document" as EmbeddingTask,
+      });
 
-    allEmbeddings.push(...response.embeddings);
+      // Handle new response format with EmbeddingResult objects
+      const embeddings = response.embeddings.map((e) => 
+        Array.isArray(e) ? e : e.embedding
+      );
+      allEmbeddings.push(...embeddings);
+    } catch {
+      // Fall back to legacy endpoint/format if new format fails
+      const response = await request<LegacyEmbeddingResponse>("/embed", {
+        model: "kanon-2-embedder",
+        input: batch,
+        task_type: "retrieval_document",
+      });
+      allEmbeddings.push(...response.embeddings);
+    }
   }
 
   return allEmbeddings;
@@ -155,16 +195,30 @@ export async function embedDocuments(texts: string[]): Promise<number[][]> {
 
 /**
  * Embed a query for retrieval
- * Uses task_type: "retrieval_query" for query embeddings
+ * Uses task: "retrieval/query" for query embeddings
+ * @see https://docs.isaacus.com/quickstart
  */
 export async function embedQuery(query: string): Promise<number[]> {
-  const response = await request<EmbeddingResponse>("/embed", {
-    model: "kanon-2-embedder",
-    input: [query],
-    task_type: "retrieval_query",
-  });
+  // Try official SDK format first, fall back to legacy
+  try {
+    const response = await request<EmbeddingResponse>("/embeddings", {
+      model: "kanon-2-embedder",
+      texts: [query],
+      task: "retrieval/query" as EmbeddingTask,
+    });
 
-  return response.embeddings[0];
+    // Handle new response format
+    const firstEmbedding = response.embeddings[0];
+    return Array.isArray(firstEmbedding) ? firstEmbedding : firstEmbedding.embedding;
+  } catch {
+    // Fall back to legacy endpoint/format
+    const response = await request<LegacyEmbeddingResponse>("/embed", {
+      model: "kanon-2-embedder",
+      input: [query],
+      task_type: "retrieval_query",
+    });
+    return response.embeddings[0];
+  }
 }
 
 /**

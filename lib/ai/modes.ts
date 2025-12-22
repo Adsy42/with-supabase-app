@@ -206,8 +206,9 @@ export function getModeConfig(modeId: CounselMode): ModeConfig {
 }
 
 /**
- * Detect suggested mode based on user query keywords
+ * Detect suggested mode based on user query keywords (synchronous fallback)
  * Returns the mode with the most keyword matches, or 'general' if none
+ * @deprecated Use classifyQueryIntent from document-classifier for AI-powered detection
  */
 export function detectSuggestedMode(query: string): CounselMode {
   const lowerQuery = query.toLowerCase();
@@ -228,6 +229,50 @@ export function detectSuggestedMode(query: string): CounselMode {
   }
 
   return bestMatch;
+}
+
+/**
+ * Detect suggested mode with confidence score
+ * Combines keyword matching with AI classification when available
+ */
+export interface ModeDetectionResult {
+  mode: CounselMode;
+  confidence: number;
+  aiClassified: boolean;
+}
+
+/**
+ * Synchronous keyword-based mode detection with confidence
+ * For async AI-powered detection, use classifyQueryIntent from document-classifier
+ */
+export function detectModeWithConfidence(query: string): ModeDetectionResult {
+  const lowerQuery = query.toLowerCase();
+  let bestMatch: CounselMode = "general";
+  let maxMatches = 0;
+
+  for (const [modeId, config] of Object.entries(COUNSEL_MODES)) {
+    if (modeId === "general") continue;
+
+    const matches = config.triggerKeywords.filter((keyword) =>
+      lowerQuery.includes(keyword.toLowerCase())
+    ).length;
+
+    if (matches > maxMatches) {
+      maxMatches = matches;
+      bestMatch = modeId as CounselMode;
+    }
+  }
+
+  // Calculate confidence based on match count
+  const confidence = maxMatches > 0 
+    ? Math.min(0.5 + maxMatches * 0.15, 0.9)
+    : 0.3;
+
+  return {
+    mode: bestMatch,
+    confidence,
+    aiClassified: false,
+  };
 }
 
 /**
