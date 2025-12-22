@@ -1,11 +1,11 @@
 /**
- * PDF Parsing API Route
- * Extracts text from uploaded PDF files using pdf-parse v2
+ * DOCX Parsing API Route
+ * Extracts text from uploaded DOCX files using mammoth
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { PDFParse } from "pdf-parse";
+import mammoth from "mammoth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,9 +27,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Verify it's a PDF
-    if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
-      return NextResponse.json({ error: "File must be a PDF" }, { status: 400 });
+    // Verify it's a DOCX
+    const isDocx = file.name.toLowerCase().endsWith(".docx") ||
+      file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    
+    if (!isDocx) {
+      return NextResponse.json({ error: "File must be a DOCX" }, { status: 400 });
     }
 
     // Check file size (max 10MB)
@@ -41,23 +44,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Convert file to Uint8Array
+    // Convert file to buffer
     const arrayBuffer = await file.arrayBuffer();
-    const data = new Uint8Array(arrayBuffer);
+    const buffer = Buffer.from(arrayBuffer);
 
-    // Parse PDF using pdf-parse v2
-    const parser = new PDFParse({ data });
-    const textResult = await parser.getText();
+    // Parse DOCX using mammoth
+    const result = await mammoth.extractRawText({ buffer });
 
-    // Clean up parser resources
-    await parser.destroy();
-
-    if (!textResult.text || textResult.text.trim().length === 0) {
+    if (!result.value || result.value.trim().length === 0) {
       return NextResponse.json(
         {
           error: "No text found",
-          message: "This PDF appears to be image-based or empty. Please copy and paste the text content.",
-          content: `[PDF: ${file.name}]\n\nNo extractable text found. This may be a scanned document. Please copy and paste the content.`,
+          message: "This DOCX appears to be empty or contains only images.",
+          content: `[DOCX: ${file.name}]\n\nNo extractable text found. Please copy and paste the content.`,
         },
         { status: 200 }
       );
@@ -65,18 +64,19 @@ export async function POST(req: NextRequest) {
 
     // Return extracted content
     return NextResponse.json({
-      content: textResult.text,
-      pages: textResult.pages?.length || 0,
+      content: result.value,
+      messages: result.messages, // Any warnings from mammoth
     });
   } catch (error) {
-    console.error("PDF parsing error:", error);
+    console.error("DOCX parsing error:", error);
     return NextResponse.json(
       {
-        error: "Failed to parse PDF",
+        error: "Failed to parse DOCX",
         message: error instanceof Error ? error.message : "Unknown error",
-        content: "[PDF parsing failed. Please copy and paste the document content.]",
+        content: "[DOCX parsing failed. Please copy and paste the document content.]",
       },
-      { status: 200 } // Return 200 so client gets the message
+      { status: 200 }
     );
   }
 }
+

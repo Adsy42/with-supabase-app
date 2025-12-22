@@ -37,8 +37,8 @@ export async function extractTextFromFile(file: File): Promise<{
     // Full implementation would use pdf.js in browser or server endpoint
     content = await extractPDFText(file);
   } else if (isDocxFile(name, type)) {
-    // DOCX needs mammoth.js or similar
-    content = `[Document: ${name}]\n\nNote: DOCX parsing requires server processing. Please copy and paste the document content directly, or upload as PDF.`;
+    // DOCX parsing via server endpoint
+    content = await extractDocxText(file);
   } else {
     throw new Error(
       `Unsupported file type: ${type || name.split(".").pop()}. Supported: .txt, .md, .pdf, .json, .csv`
@@ -127,6 +127,38 @@ async function extractPDFText(file: File): Promise<string> {
 Unable to extract PDF text automatically. Please either:
 1. Copy and paste the document content directly into the chat
 2. Use a text file (.txt) version of the document
+
+If you pasted the content above, I can analyze it now.`;
+  }
+}
+
+/**
+ * Extract text from DOCX using server-side mammoth
+ */
+async function extractDocxText(file: File): Promise<string> {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    const response = await fetch("/api/files/parse-docx", {
+      method: "POST",
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to parse DOCX");
+    }
+    
+    const result = await response.json();
+    return result.content;
+  } catch (error) {
+    console.error("DOCX parsing error:", error);
+    return `[DOCX Document: ${file.name}]
+
+Unable to extract DOCX text automatically. Please either:
+1. Copy and paste the document content directly into the chat
+2. Use a PDF or text file (.txt) version of the document
 
 If you pasted the content above, I can analyze it now.`;
   }
