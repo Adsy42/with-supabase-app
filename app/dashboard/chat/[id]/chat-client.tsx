@@ -5,6 +5,7 @@
 'use client';
 
 import { CopilotChat } from '@copilotkit/react-ui';
+import '@copilotkit/react-ui/styles.css';
 
 const SYSTEM_PROMPT = `You are Orderly, an advanced legal AI assistant designed for Finnish legal professionals. You help with:
 
