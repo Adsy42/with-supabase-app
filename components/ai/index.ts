@@ -60,3 +60,6 @@ export { CodeBlock, InlineCode } from "./code-block";
 
 // Task components
 export { TaskList } from "./task";
+
+// Mode selection components
+export { ModeSelector, ModePills, DEFAULT_MODE, type CounselMode } from "./mode-selector";

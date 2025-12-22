@@ -235,3 +235,4 @@ grant all on public.document_chunks to authenticated;
 grant execute on function public.match_document_chunks to authenticated;
 
 
+
