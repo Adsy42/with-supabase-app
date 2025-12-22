@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { ChatClient } from './chat-client';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 interface Conversation {
   id: string;
@@ -117,7 +118,9 @@ export default function ChatPage() {
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto p-6">
-            <ChatClient conversationId={conversationId} />
+            <ErrorBoundary>
+              <ChatClient conversationId={conversationId} />
+            </ErrorBoundary>
           </div>
         </div>
       </div>

@@ -7,11 +7,8 @@
 
 import { CopilotRuntime, copilotRuntimeNextJSAppRouterEndpoint, AnthropicAdapter } from '@copilotkit/runtime';
 import { createClient } from '@/lib/supabase/server';
-import { legalAgentConfig, createLegalAgentTools } from '@/lib/agents/harness';
 
 export const maxDuration = 60;
-
-const runtime = new CopilotRuntime();
 
 export async function POST(request: Request) {
   try {
@@ -54,14 +51,14 @@ export async function POST(request: Request) {
       // Request body might not be JSON, that's okay
     }
 
-    // Get tools with user context
-    const tools = createLegalAgentTools(user.id, conversationId);
-
     // Use Anthropic adapter
     // API key is read from ANTHROPIC_API_KEY env var
     // System prompt is set in the frontend CopilotKit component
+    // TODO: Integrate tools with AnthropicAdapter in next iteration
+    // Tools are defined in lib/agents/harness.ts and will be connected
+    // when we fully integrate Deep Agents with CopilotKit
     const endpoint = copilotRuntimeNextJSAppRouterEndpoint({
-      runtime,
+      runtime: new CopilotRuntime(),
       serviceAdapter: new AnthropicAdapter({
         model: 'claude-sonnet-4-20250514',
       }),
