@@ -313,3 +313,36 @@
     scroll-behavior: auto;
   }
 }
+
+/* CopilotKit Theme Customization - Match Orderly Design System */
+@layer base {
+  :root {
+    /* Map Orderly colors to CopilotKit variables */
+    --copilotkit-primary: hsl(var(--primary));
+    --copilotkit-primary-foreground: hsl(var(--primary-foreground));
+    --copilotkit-background: hsl(var(--background));
+    --copilotkit-foreground: hsl(var(--foreground));
+    --copilotkit-muted: hsl(var(--muted));
+    --copilotkit-muted-foreground: hsl(var(--muted-foreground));
+    --copilotkit-border: hsl(var(--border));
+    --copilotkit-card: hsl(var(--card));
+    --copilotkit-card-foreground: hsl(var(--card-foreground));
+    --copilotkit-accent: hsl(var(--accent));
+    --copilotkit-accent-foreground: hsl(var(--accent-foreground));
+  }
+
+  .dark {
+    /* Dark mode CopilotKit variables */
+    --copilotkit-primary: hsl(var(--primary));
+    --copilotkit-primary-foreground: hsl(var(--primary-foreground));
+    --copilotkit-background: hsl(var(--background));
+    --copilotkit-foreground: hsl(var(--foreground));
+    --copilotkit-muted: hsl(var(--muted));
+    --copilotkit-muted-foreground: hsl(var(--muted-foreground));
+    --copilotkit-border: hsl(var(--border));
+    --copilotkit-card: hsl(var(--card));
+    --copilotkit-card-foreground: hsl(var(--card-foreground));
+    --copilotkit-accent: hsl(var(--accent));
+    --copilotkit-accent-foreground: hsl(var(--accent-foreground));
+  }
+}
