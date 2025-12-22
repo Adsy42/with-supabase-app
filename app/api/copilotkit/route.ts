@@ -1,15 +1,13 @@
 /**
  * CopilotKit Runtime API Route
  *
- * Connects CopilotKit frontend to the Deep Agent for legal AI assistance.
- * Uses the CoAgent pattern to run the full Deep Agent architecture:
- * - Planning (write_todos)
- * - File system tools for context management
- * - Subagent spawning for specialized tasks
- * - Legal tools (search, rerank, classify, risk)
- * - Persistent memory across conversations
+ * Connects CopilotKit frontend to the legal AI assistant.
+ * Uses LangChainAdapter with ChatAnthropic and bound legal tools:
+ * - Document search (Isaacus embeddings + Supabase vector)
+ * - Reranking, extractive QA, classification
+ * - Risk analysis
  *
- * @see https://docs.langchain.com/oss/javascript/deepagents/overview
+ * @see https://docs.copilotkit.ai/reference/classes/llm-adapters/LangChainAdapter
  */
 
 import {
@@ -17,8 +15,11 @@ import {
   copilotRuntimeNextJSAppRouterEndpoint,
 } from '@copilotkit/runtime';
 import { createClient } from '@/lib/supabase/server';
-import { LegalCoAgent } from '@/lib/agents/coagent';
-import { extractConversationId, extractMatterId } from '@/lib/agents/adapter';
+import {
+  createLangGraphAdapter,
+  extractConversationId,
+  extractMatterId,
+} from '@/lib/agents/adapter';
 
 export const maxDuration = 60;
 
@@ -100,23 +101,17 @@ export async function POST(request: Request) {
       }
     }
 
-    // Create the Deep Agent as a CoAgent with user context
-    const legalAgent = new LegalCoAgent({
+    // Create the LangGraph adapter with user context
+    const adapter = createLangGraphAdapter({
       userId: user.id,
-      conversationId: activeConversationId || undefined,
-      matterId: matterId || undefined,
+      conversationId: activeConversationId || '',
+      matterId,
     });
 
-    // Create the CopilotKit runtime with the agent
-    const runtime = new CopilotRuntime({
-      agents: {
-        'orderly-legal-agent': legalAgent,
-      },
-    });
-
-    // Create the endpoint handler
+    // Create the CopilotKit endpoint
     const endpoint = copilotRuntimeNextJSAppRouterEndpoint({
-      runtime,
+      runtime: new CopilotRuntime(),
+      serviceAdapter: adapter,
       endpoint: '/api/copilotkit',
     });
 
