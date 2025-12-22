@@ -11,7 +11,8 @@ import { DashboardHeader } from '@/components/layout/dashboard-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MessageSquare, Plus, Trash2 } from 'lucide-react';
+import { MessageSquare, Plus } from 'lucide-react';
+import { DeleteConversationButton } from './delete-button';
 
 export default function ChatListPage() {
   return (
@@ -113,17 +114,7 @@ async function ConversationList() {
                   </p>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => {
-                  e.preventDefault();
-                  // TODO: Implement delete
-                }}
-              >
-                <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-              </Button>
+              <DeleteConversationButton conversationId={conversation.id} />
             </CardContent>
           </Card>
         </Link>
