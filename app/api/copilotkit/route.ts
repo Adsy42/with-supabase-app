@@ -5,8 +5,8 @@
  * Handles streaming responses and tool calls.
  */
 
-import { streamText, convertToModelMessages } from 'ai';
-import { anthropic } from '@ai-sdk/anthropic';
+import { streamText } from 'ai';
+import { createAnthropic } from '@ai-sdk/anthropic';
 import { createClient } from '@/lib/supabase/server';
 import { legalAgentConfig, createLegalAgentTools } from '@/lib/agents/harness';
 
@@ -19,6 +19,20 @@ interface UIMessage {
 
 export async function POST(request: Request) {
   try {
+    // Check for API key first
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({
+          error: 'ANTHROPIC_API_KEY is not configured. Please add it to your environment variables.',
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     // Get authenticated user
     const supabase = await createClient();
     const {
@@ -26,7 +40,13 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return new Response('Unauthorized', { status: 401 });
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     // Parse request body
@@ -37,28 +57,32 @@ export async function POST(request: Request) {
     };
 
     if (!messages || !Array.isArray(messages)) {
-      return new Response('Invalid request: messages required', { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Invalid request: messages required' }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     }
 
-    // Convert UI messages to model format
-    const modelMessages = convertToModelMessages(
-      messages.map((m, i) => ({
-        id: `msg-${i}`,
-        role: m.role,
-        content: m.content,
-        parts: [{ type: 'text' as const, text: m.content }],
-        createdAt: new Date(),
-      }))
-    );
+    // Convert UI messages to simple format for AI SDK
+    const formattedMessages = messages.map((m) => ({
+      role: m.role as 'user' | 'assistant' | 'system',
+      content: m.content,
+    }));
 
     // Create tools with user context
     const tools = createLegalAgentTools(user.id, conversationId);
+
+    // Create Anthropic client
+    const anthropic = createAnthropic({ apiKey });
 
     // Stream the response
     const result = streamText({
       model: anthropic('claude-sonnet-4-20250514'),
       system: legalAgentConfig.systemPrompt,
-      messages: modelMessages,
+      messages: formattedMessages,
       tools,
       onFinish: async ({ text, toolCalls, usage }) => {
         // Save the assistant message to the database if we have a conversation
@@ -90,8 +114,13 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('CopilotKit API error:', error);
     return new Response(
-      error instanceof Error ? error.message : 'Internal server error',
-      { status: 500 }
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Internal server error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
     );
   }
 }

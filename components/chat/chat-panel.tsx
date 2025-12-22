@@ -84,8 +84,17 @@ export function ChatPanel({
         }),
       });
 
+      // Check if response is JSON (error case)
+      const contentType = response.headers.get('content-type');
+      if (contentType?.includes('application/json')) {
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+      }
+
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        throw new Error(`Request failed with status ${response.status}`);
       }
 
       // Read streaming response
@@ -103,24 +112,36 @@ export function ChatPanel({
       setMessages((prev) => [...prev, assistantMessage]);
 
       if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-          const chunk = decoder.decode(value);
-          assistantContent += chunk;
+            const chunk = decoder.decode(value, { stream: true });
+            assistantContent += chunk;
 
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMessage.id
-                ? { ...m, content: assistantContent }
-                : m
-            )
-          );
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessage.id
+                  ? { ...m, content: assistantContent }
+                  : m
+              )
+            );
+          }
+        } finally {
+          reader.releaseLock();
         }
       }
+
+      // If we got no content, show an error
+      if (!assistantContent.trim()) {
+        setMessages((prev) => prev.filter((m) => m.id !== assistantMessage.id));
+        throw new Error('No response received from AI');
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      const errorMessage = err instanceof Error ? err.message : 'Something went wrong';
+      setError(errorMessage);
+      console.error('Chat error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -138,7 +159,7 @@ export function ChatPanel({
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-6">
         {messages.length === 0 ? (
-          <EmptyState />
+          <EmptyState onSuggestionClick={(text) => setInput(text)} />
         ) : (
           <div className="mx-auto max-w-3xl space-y-6">
             <AnimatePresence initial={false}>
@@ -262,7 +283,7 @@ function MessageBubble({ message }: { message: Message }) {
 /**
  * Empty State Component
  */
-function EmptyState() {
+function EmptyState({ onSuggestionClick }: { onSuggestionClick?: (text: string) => void }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -289,6 +310,7 @@ function EmptyState() {
         ].map((suggestion) => (
           <button
             key={suggestion}
+            onClick={() => onSuggestionClick?.(suggestion)}
             className={cn(
               'rounded-lg border border-border bg-card px-4 py-3 text-left text-sm',
               'hover:border-primary/50 hover:bg-muted transition-colors'
