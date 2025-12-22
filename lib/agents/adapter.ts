@@ -1,11 +1,20 @@
 /**
  * CopilotKit LangChain Adapter
  *
- * Bridges CopilotKit runtime with our LangChain-based legal AI.
- * Uses CopilotKit's LangChainAdapter with a ChatAnthropic model
- * that has our legal tools bound to it.
+ * Bridges CopilotKit runtime with our legal AI tools.
+ *
+ * Current Implementation:
+ * Uses ChatAnthropic with bound legal tools, which CopilotKit can stream properly.
+ *
+ * Future Path to Full Deep Agent:
+ * The `deepagents` library provides planning, file system, and subagent capabilities.
+ * To fully leverage Deep Agents with CopilotKit, you would need:
+ * 1. Deploy the Deep Agent to LangGraph Platform
+ * 2. Use CopilotKit's `useCoAgent` hook with the deployed agent
+ * 3. Or use CopilotKit's `LangGraphAgent` adapter for remote agents
  *
  * @see https://docs.copilotkit.ai/reference/classes/llm-adapters/LangChainAdapter
+ * @see https://docs.langchain.com/oss/javascript/deepagents/overview
  */
 
 import { LangChainAdapter } from '@copilotkit/runtime';
@@ -15,7 +24,7 @@ import type { BaseMessage } from '@langchain/core/messages';
 import type { DynamicStructuredTool } from '@langchain/core/tools';
 
 import { createLegalTools } from './tools';
-import { LEGAL_AGENT_SYSTEM_PROMPT } from './harness';
+import { LEGAL_DEEP_AGENT_SYSTEM_PROMPT } from './deep-agent';
 
 /**
  * Parameters passed to the chain function by CopilotKit
@@ -29,7 +38,7 @@ interface ChainFnParameters {
 }
 
 /**
- * Configuration for creating the LangChain adapter
+ * Configuration for creating the adapter
  */
 export interface LangGraphAdapterConfig {
   /**
@@ -49,13 +58,20 @@ export interface LangGraphAdapterConfig {
 }
 
 /**
- * Create a CopilotKit-compatible adapter using ChatAnthropic with tools
+ * Create a CopilotKit-compatible adapter using ChatAnthropic with legal tools
  *
  * This adapter:
  * 1. Receives messages from CopilotKit frontend
  * 2. Adds the system prompt if not present
  * 3. Uses ChatAnthropic with bound legal tools
  * 4. Streams the response back to CopilotKit
+ *
+ * Legal tools included:
+ * - Document search (Isaacus embeddings + Supabase vector)
+ * - Reranking and extractive QA (Isaacus)
+ * - Clause classification and risk analysis (Isaacus)
+ * - Task planning (todos) when conversationId is provided
+ * - Long-term memory storage
  *
  * @example
  * ```typescript
@@ -84,6 +100,7 @@ export function createLangGraphAdapter(
   });
 
   // Create our legal tools with user context
+  // This includes Isaacus-powered search, analysis, and planning tools
   const tools = createLegalTools(userId, conversationId, matterId);
 
   // Bind tools to the model
@@ -97,7 +114,7 @@ export function createLangGraphAdapter(
       const hasSystemMessage = messages.some((m) => m._getType() === 'system');
       const allMessages: BaseMessage[] = hasSystemMessage
         ? messages
-        : [new SystemMessage(LEGAL_AGENT_SYSTEM_PROMPT), ...messages];
+        : [new SystemMessage(LEGAL_DEEP_AGENT_SYSTEM_PROMPT), ...messages];
 
       // Stream the response from the model
       // The LangChainAdapter can handle the stream from ChatAnthropic
