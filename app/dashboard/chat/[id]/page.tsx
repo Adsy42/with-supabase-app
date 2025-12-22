@@ -24,10 +24,6 @@ interface Conversation {
   updated_at: string;
 }
 
-// Prevent static generation for this dynamic route
-export const dynamic = 'force-dynamic';
-export const dynamicParams = true;
-
 export default function ChatPage() {
   const params = useParams();
   const conversationId = params.id as string;
