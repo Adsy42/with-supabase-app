@@ -101,10 +101,7 @@ export default function ChatPage() {
   }
 
   return (
-    <CopilotKit
-      runtimeUrl="/api/copilotkit"
-      publicApiKey={process.env.NEXT_PUBLIC_COPILOTKIT_API_KEY}
-    >
+    <CopilotKit runtimeUrl="/api/copilotkit">
       <div className="flex h-full flex-col">
         <DashboardHeader title={conversation.title || 'Chat'}>
           <Link href="/dashboard/chat">
