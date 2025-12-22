@@ -1,11 +1,15 @@
 /**
  * CopilotKit Runtime API Route
  *
- * Connects CopilotKit frontend to the LangGraph Deep Agent.
- * Uses LangChainAdapter to invoke our custom legal AI agent with:
- * - Isaacus-powered tools (embedding, reranking, QA, classification)
- * - Supabase vector store for document search
- * - Persistent memory and task planning
+ * Connects CopilotKit frontend to the Deep Agent for legal AI assistance.
+ * Uses the CoAgent pattern to run the full Deep Agent architecture:
+ * - Planning (write_todos)
+ * - File system tools for context management
+ * - Subagent spawning for specialized tasks
+ * - Legal tools (search, rerank, classify, risk)
+ * - Persistent memory across conversations
+ *
+ * @see https://docs.langchain.com/oss/javascript/deepagents/overview
  */
 
 import {
@@ -13,11 +17,8 @@ import {
   copilotRuntimeNextJSAppRouterEndpoint,
 } from '@copilotkit/runtime';
 import { createClient } from '@/lib/supabase/server';
-import {
-  createLangGraphAdapter,
-  extractConversationId,
-  extractMatterId,
-} from '@/lib/agents/adapter';
+import { LegalCoAgent } from '@/lib/agents/coagent';
+import { extractConversationId, extractMatterId } from '@/lib/agents/adapter';
 
 export const maxDuration = 60;
 
@@ -28,7 +29,8 @@ export async function POST(request: Request) {
     if (!anthropicKey) {
       return new Response(
         JSON.stringify({
-          error: 'ANTHROPIC_API_KEY is not configured. Please add it to your environment variables.',
+          error:
+            'ANTHROPIC_API_KEY is not configured. Please add it to your environment variables.',
         }),
         {
           status: 500,
@@ -57,13 +59,10 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     // Parse request to extract properties
@@ -101,17 +100,23 @@ export async function POST(request: Request) {
       }
     }
 
-    // Create the LangGraph adapter with user context
-    const adapter = createLangGraphAdapter({
+    // Create the Deep Agent as a CoAgent with user context
+    const legalAgent = new LegalCoAgent({
       userId: user.id,
-      conversationId: activeConversationId || '',
-      matterId,
+      conversationId: activeConversationId || undefined,
+      matterId: matterId || undefined,
     });
 
-    // Create the CopilotKit endpoint
+    // Create the CopilotKit runtime with the agent
+    const runtime = new CopilotRuntime({
+      agents: {
+        'orderly-legal-agent': legalAgent,
+      },
+    });
+
+    // Create the endpoint handler
     const endpoint = copilotRuntimeNextJSAppRouterEndpoint({
-      runtime: new CopilotRuntime(),
-      serviceAdapter: adapter,
+      runtime,
       endpoint: '/api/copilotkit',
     });
 

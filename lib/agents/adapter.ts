@@ -1,13 +1,12 @@
 /**
  * CopilotKit LangGraph Adapter
  *
- * Bridges CopilotKit runtime with the Deep Agent for legal AI assistance.
- *
- * Uses the Deep Agent which provides:
- * - Built-in planning (write_todos)
- * - File system tools for context management
- * - Subagent spawning capability
- * - Our custom Isaacus-powered legal tools
+ * Bridges CopilotKit runtime with the LangGraph agent for legal AI assistance.
+ * Uses the ChatAnthropic model with bound legal tools to provide:
+ * - Document search and analysis
+ * - Contract clause classification
+ * - Risk assessment
+ * - Task planning
  *
  * @see https://docs.copilotkit.ai/reference/classes/llm-adapters/LangChainAdapter
  * @see https://docs.langchain.com/oss/javascript/deepagents/overview
@@ -15,9 +14,11 @@
 
 import { LangChainAdapter } from '@copilotkit/runtime';
 import type { BaseMessage } from '@langchain/core/messages';
-import { AIMessage, SystemMessage } from '@langchain/core/messages';
+import { SystemMessage } from '@langchain/core/messages';
+import { ChatAnthropic } from '@langchain/anthropic';
 
-import { createLegalDeepAgent, LEGAL_DEEP_AGENT_SYSTEM_PROMPT } from './deep-agent';
+import { LEGAL_DEEP_AGENT_SYSTEM_PROMPT } from './deep-agent';
+import { createLegalTools } from './tools';
 
 /**
  * Parameters passed to the chain function by CopilotKit
@@ -50,13 +51,11 @@ export interface LangGraphAdapterConfig {
 }
 
 /**
- * Convert CopilotKit messages to the format expected by Deep Agent
+ * Prepare messages with system prompt
  */
 function prepareMessages(messages: BaseMessage[]): BaseMessage[] {
-  // Check if system message already exists
   const hasSystemMessage = messages.some((m) => m._getType() === 'system');
 
-  // Add system prompt if not present
   if (!hasSystemMessage) {
     return [new SystemMessage(LEGAL_DEEP_AGENT_SYSTEM_PROMPT), ...messages];
   }
@@ -65,46 +64,20 @@ function prepareMessages(messages: BaseMessage[]): BaseMessage[] {
 }
 
 /**
- * Extract text content from an AIMessage that may have complex content
- */
-function extractTextContent(message: AIMessage): string {
-  const content = message.content;
-
-  if (typeof content === 'string') {
-    return content;
-  }
-
-  // Handle array content (e.g., from Anthropic)
-  if (Array.isArray(content)) {
-    return content
-      .map((block) => {
-        if (typeof block === 'string') {
-          return block;
-        }
-        if (block && typeof block === 'object' && 'text' in block) {
-          return (block as { text: string }).text;
-        }
-        return '';
-      })
-      .join('');
-  }
-
-  return String(content);
-}
-
-/**
- * Create a CopilotKit-compatible adapter using the Deep Agent
+ * Create a CopilotKit-compatible adapter with legal AI tools
  *
  * This adapter:
  * 1. Receives messages from CopilotKit frontend
- * 2. Creates a Deep Agent with full capabilities
- * 3. Returns the response to CopilotKit
+ * 2. Uses Claude with bound legal tools (search, rerank, classify, etc.)
+ * 3. Streams the response back to CopilotKit
  *
- * Deep Agent capabilities:
- * - Planning with write_todos
- * - File system tools (ls, read_file, write_file, edit_file)
- * - Subagent spawning with task tool
- * - Legal AI tools (search, rerank, extract, classify, analyze)
+ * The legal tools include:
+ * - search_documents: Semantic search through legal documents
+ * - rerank_results: Re-score search results for better relevance
+ * - extract_answer: Find precise answers in document text
+ * - classify_clauses: Identify clause types
+ * - analyze_risk: Assess legal risks in contract provisions
+ * - write_todos: Create task plans for complex work
  *
  * @example
  * ```typescript
@@ -123,69 +96,30 @@ function extractTextContent(message: AIMessage): string {
 export function createLangGraphAdapter(
   config: LangGraphAdapterConfig
 ): LangChainAdapter {
-  const { userId, conversationId, matterId } = config;
-
   return new LangChainAdapter({
     chainFn: async (params: ChainFnParameters) => {
-      const { messages, threadId } = params;
+      const { messages } = params;
 
-      // Create the Deep Agent with user context
-      // The Deep Agent includes all capabilities:
-      // - write_todos for planning
-      // - File system tools
-      // - task tool for subagents
-      // - Our legal AI tools
-      const agent = createLegalDeepAgent({
-        userId,
-        conversationId,
-        matterId,
+      // Create the LLM
+      const llm = new ChatAnthropic({
+        model: 'claude-sonnet-4-20250514',
+        temperature: 0.7,
+        apiKey: process.env.ANTHROPIC_API_KEY,
       });
+
+      // Create legal tools with user context
+      const tools = createLegalTools(config.userId, config.conversationId, config.matterId);
+
+      // Bind tools to the model for tool calling
+      const modelWithTools = llm.bindTools(tools);
 
       // Prepare messages with system prompt
       const preparedMessages = prepareMessages(messages);
 
-      try {
-        // Invoke the Deep Agent
-        // The agent returns the final state with all messages
-        const result = await agent.invoke(
-          { messages: preparedMessages },
-          {
-            configurable: {
-              thread_id: threadId || conversationId,
-            },
-          }
-        );
+      // Stream the response - this returns an IterableReadableStream
+      const stream = await modelWithTools.stream(preparedMessages);
 
-        // Extract the last AI message from the result
-        const resultMessages = result.messages as BaseMessage[];
-        const lastMessage = resultMessages[resultMessages.length - 1];
-
-        if (lastMessage && lastMessage._getType() === 'ai') {
-          const aiMessage = lastMessage as AIMessage;
-          const textContent = extractTextContent(aiMessage);
-
-          // Return an AIMessage that CopilotKit can handle
-          return new AIMessage({
-            content: textContent,
-            tool_calls: aiMessage.tool_calls,
-          });
-        }
-
-        // Fallback if no AI message found
-        return new AIMessage({
-          content:
-            'I apologize, but I was unable to generate a response. Please try again.',
-        });
-      } catch (error) {
-        console.error('Deep Agent error:', error);
-
-        // Return error message
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error';
-        return new AIMessage({
-          content: `I encountered an error while processing your request: ${errorMessage}. Please try again.`,
-        });
-      }
+      return stream;
     },
   });
 }

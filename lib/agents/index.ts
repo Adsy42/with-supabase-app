@@ -8,7 +8,7 @@
  * ```typescript
  * import {
  *   createLegalDeepAgent,
- *   createLangGraphAdapter,
+ *   LegalCoAgent,
  *   createLegalTools,
  *   LEGAL_DEEP_AGENT_SYSTEM_PROMPT,
  * } from '@/lib/agents';
@@ -22,7 +22,14 @@ export {
   type LegalDeepAgentConfig,
 } from './deep-agent';
 
-// CopilotKit adapter
+// CopilotKit CoAgent integration
+export {
+  LegalCoAgent,
+  createLegalCoAgentFactory,
+  type LegalCoAgentConfig,
+} from './coagent';
+
+// CopilotKit adapter (for LangChainAdapter approach)
 export {
   createLangGraphAdapter,
   extractConversationId,
