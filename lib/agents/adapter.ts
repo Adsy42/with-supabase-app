@@ -1,17 +1,20 @@
 /**
- * CopilotKit LangGraph Adapter
+ * CopilotKit LangChain Adapter
  *
- * Bridges CopilotKit runtime with our LangGraph Deep Agent.
- * Uses CopilotKit's LangChainAdapter with a custom chainFn that
- * invokes the LangGraph agent and returns responses.
+ * Bridges CopilotKit runtime with our LangChain-based legal AI.
+ * Uses CopilotKit's LangChainAdapter with a ChatAnthropic model
+ * that has our legal tools bound to it.
+ *
+ * @see https://docs.copilotkit.ai/reference/classes/llm-adapters/LangChainAdapter
  */
 
 import { LangChainAdapter } from '@copilotkit/runtime';
-import { AIMessage, SystemMessage } from '@langchain/core/messages';
+import { ChatAnthropic } from '@langchain/anthropic';
+import { SystemMessage } from '@langchain/core/messages';
 import type { BaseMessage } from '@langchain/core/messages';
 import type { DynamicStructuredTool } from '@langchain/core/tools';
 
-import { createLegalAgentGraph, type LegalAgentConfig } from './graph';
+import { createLegalTools } from './tools';
 import { LEGAL_AGENT_SYSTEM_PROMPT } from './harness';
 
 /**
@@ -26,7 +29,7 @@ interface ChainFnParameters {
 }
 
 /**
- * Configuration for creating the LangGraph adapter
+ * Configuration for creating the LangChain adapter
  */
 export interface LangGraphAdapterConfig {
   /**
@@ -46,13 +49,13 @@ export interface LangGraphAdapterConfig {
 }
 
 /**
- * Create a CopilotKit-compatible adapter that uses our LangGraph agent
+ * Create a CopilotKit-compatible adapter using ChatAnthropic with tools
  *
  * This adapter:
  * 1. Receives messages from CopilotKit frontend
- * 2. Converts them to LangGraph format
- * 3. Invokes the Deep Agent with full tool access
- * 4. Returns the response to CopilotKit
+ * 2. Adds the system prompt if not present
+ * 3. Uses ChatAnthropic with bound legal tools
+ * 4. Streams the response back to CopilotKit
  *
  * @example
  * ```typescript
@@ -68,62 +71,39 @@ export interface LangGraphAdapterConfig {
  * });
  * ```
  */
-export function createLangGraphAdapter(config: LangGraphAdapterConfig): LangChainAdapter {
+export function createLangGraphAdapter(
+  config: LangGraphAdapterConfig
+): LangChainAdapter {
   const { userId, conversationId, matterId } = config;
 
+  // Create the model
+  const model = new ChatAnthropic({
+    model: 'claude-sonnet-4-20250514',
+    temperature: 0.7,
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  });
+
+  // Create our legal tools with user context
+  const tools = createLegalTools(userId, conversationId, matterId);
+
+  // Bind tools to the model
+  const modelWithTools = model.bindTools(tools);
+
   return new LangChainAdapter({
-    chainFn: async (params: ChainFnParameters): Promise<AIMessage> => {
-      const { messages, threadId } = params;
+    chainFn: async (params: ChainFnParameters) => {
+      const { messages } = params;
 
-      // Use threadId as conversation ID if provided, otherwise use config
-      const activeConversationId = threadId || conversationId;
-
-      // Create the agent graph with context
-      const agentConfig: LegalAgentConfig = {
-        userId,
-        conversationId: activeConversationId,
-        matterId,
-        model: 'claude-sonnet-4-20250514',
-        temperature: 0.7,
-      };
-
-      const graph = createLegalAgentGraph(agentConfig);
-
-      // Convert CopilotKit messages to include system prompt if not present
+      // Add system prompt if not present
       const hasSystemMessage = messages.some((m) => m._getType() === 'system');
-
-      const graphMessages: BaseMessage[] = hasSystemMessage
+      const allMessages: BaseMessage[] = hasSystemMessage
         ? messages
         : [new SystemMessage(LEGAL_AGENT_SYSTEM_PROMPT), ...messages];
 
-      // Invoke the graph and get final state
-      const result = await graph.invoke({
-        messages: graphMessages,
-        userId,
-        conversationId: activeConversationId,
-        matterId,
-        todos: [],
-        memories: {},
-        documents: [],
-      });
+      // Stream the response from the model
+      // The LangChainAdapter can handle the stream from ChatAnthropic
+      const stream = await modelWithTools.stream(allMessages);
 
-      // Find the last AI message in the result
-      const resultMessages = result.messages;
-      for (let i = resultMessages.length - 1; i >= 0; i--) {
-        const msg = resultMessages[i];
-        if (msg instanceof AIMessage) {
-          return msg;
-        }
-      }
-
-      // Fallback: create an AI message from the last message content
-      const lastMessage = resultMessages[resultMessages.length - 1];
-      const content =
-        typeof lastMessage.content === 'string'
-          ? lastMessage.content
-          : JSON.stringify(lastMessage.content);
-
-      return new AIMessage(content);
+      return stream;
     },
   });
 }
@@ -131,7 +111,9 @@ export function createLangGraphAdapter(config: LangGraphAdapterConfig): LangChai
 /**
  * Extract conversation ID from CopilotKit request properties
  */
-export function extractConversationId(properties?: Record<string, unknown>): string | undefined {
+export function extractConversationId(
+  properties?: Record<string, unknown>
+): string | undefined {
   if (!properties) return undefined;
 
   if (typeof properties.conversationId === 'string') {
@@ -148,7 +130,9 @@ export function extractConversationId(properties?: Record<string, unknown>): str
 /**
  * Extract matter ID from CopilotKit request properties
  */
-export function extractMatterId(properties?: Record<string, unknown>): string | undefined {
+export function extractMatterId(
+  properties?: Record<string, unknown>
+): string | undefined {
   if (!properties) return undefined;
 
   if (typeof properties.matterId === 'string') {
