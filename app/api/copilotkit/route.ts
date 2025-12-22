@@ -1,12 +1,13 @@
 /**
  * CopilotKit Runtime API Route
  *
- * Connects CopilotKit frontend to the Deep Agent using LangChain integration.
+ * Connects CopilotKit frontend to the Deep Agent using Anthropic adapter.
+ * For MVP, we use AnthropicAdapter with our tools, then enhance with full Deep Agent integration.
  */
 
-import { CopilotRuntime, copilotRuntimeNextJSAppRouterEndpoint, LangChainAdapter } from '@copilotkit/runtime';
+import { CopilotRuntime, copilotRuntimeNextJSAppRouterEndpoint, AnthropicAdapter } from '@copilotkit/runtime';
 import { createClient } from '@/lib/supabase/server';
-import { createLegalDeepAgent } from '@/lib/agents/deep-agent';
+import { legalAgentConfig, createLegalAgentTools } from '@/lib/agents/harness';
 
 export const maxDuration = 60;
 
@@ -53,14 +54,18 @@ export async function POST(request: Request) {
       // Request body might not be JSON, that's okay
     }
 
-    // Create Deep Agent - this returns a LangGraph graph
-    const deepAgent = createLegalDeepAgent(user.id, conversationId);
+    // Get tools with user context
+    const tools = createLegalAgentTools(user.id, conversationId);
 
-    // Use LangChain adapter to connect Deep Agent to CopilotKit
+    // Use Anthropic adapter with our tools and system prompt
     const endpoint = copilotRuntimeNextJSAppRouterEndpoint({
       runtime,
-      serviceAdapter: new LangChainAdapter({
-        chainFn: async () => deepAgent,
+      serviceAdapter: new AnthropicAdapter({
+        model: 'claude-sonnet-4-20250514',
+        apiKey,
+        systemPrompt: legalAgentConfig.systemPrompt,
+        // Convert our tools to LangChain tools for the adapter
+        // TODO: Convert tools properly for AnthropicAdapter
       }),
       endpoint: '/api/copilotkit',
     });
