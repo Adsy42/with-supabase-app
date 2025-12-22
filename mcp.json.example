@@ -22,6 +22,10 @@
       "env": {
         "VERCEL_API_TOKEN": "YOUR_VERCEL_TOKEN"
       }
+    },
+    "copilotkit-vibe-coding": {
+      "command": "npx",
+      "args": ["-y", "@copilotkit/vibe-coding-mcp"]
     }
   }
 }
