@@ -28,3 +28,4 @@ if ! echo "$branch" | grep -Eq "$valid_pattern"; then
   exit 1
 fi
 
+
