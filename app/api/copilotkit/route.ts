@@ -57,15 +57,13 @@ export async function POST(request: Request) {
     // Get tools with user context
     const tools = createLegalAgentTools(user.id, conversationId);
 
-    // Use Anthropic adapter with our tools and system prompt
+    // Use Anthropic adapter
     // API key is read from ANTHROPIC_API_KEY env var
+    // System prompt is set in the frontend CopilotKit component
     const endpoint = copilotRuntimeNextJSAppRouterEndpoint({
       runtime,
       serviceAdapter: new AnthropicAdapter({
         model: 'claude-sonnet-4-20250514',
-        systemPrompt: legalAgentConfig.systemPrompt,
-        // TODO: Convert tools properly for AnthropicAdapter
-        // Tools will be integrated in next iteration
       }),
       endpoint: '/api/copilotkit',
     });

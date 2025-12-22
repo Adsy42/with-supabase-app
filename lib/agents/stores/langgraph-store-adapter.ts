@@ -17,6 +17,8 @@ export interface LangGraphStoreConfig {
  * LangGraph Store adapter that uses Supabase for persistence
  */
 export class LangGraphStoreAdapter extends BaseStore<string, unknown> {
+  lc_namespace = ['langchain', 'stores', 'supabase'];
+
   private supabaseStore: SupabaseStore;
 
   constructor(config: LangGraphStoreConfig) {

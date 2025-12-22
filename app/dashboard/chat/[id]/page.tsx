@@ -7,14 +7,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { CopilotKit } from '@copilotkit/react-core';
-import { CopilotChat } from '@copilotkit/react-ui';
 import { createClient } from '@/lib/supabase/client';
 import { DashboardHeader } from '@/components/layout/dashboard-header';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { ChatClient } from './chat-client';
 
 interface Conversation {
   id: string;
@@ -23,9 +23,12 @@ interface Conversation {
   updated_at: string;
 }
 
+// Prevent static generation for this dynamic route
+export const dynamic = 'force-dynamic';
+export const dynamicParams = true;
+
 export default function ChatPage() {
   const params = useParams();
-  const router = useRouter();
   const conversationId = params.id as string;
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,17 +117,10 @@ export default function ChatPage() {
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto p-6">
-            <CopilotChat
-              instructions="You are Orderly, an advanced legal AI assistant. Help users with legal research, contract analysis, and document Q&A."
-              labels={{
-                title: 'Orderly Legal AI',
-                initial: 'Hi! I\'m Orderly, your legal AI assistant. How can I help you today?',
-              }}
-            />
+            <ChatClient conversationId={conversationId} />
           </div>
         </div>
       </div>
     </CopilotKit>
   );
 }
-
