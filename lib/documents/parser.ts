@@ -5,13 +5,6 @@
  * Handles various document formats commonly used in legal work.
  */
 
-// We'll use dynamic imports to handle optional dependencies gracefully
-type PDFParseResult = {
-  text: string;
-  numpages: number;
-  info: Record<string, unknown>;
-};
-
 type MammothResult = {
   value: string;
   messages: Array<{ type: string; message: string }>;
@@ -40,6 +33,7 @@ export interface ParserOptions {
 
 /**
  * Parse a PDF file and extract its text content
+ * Uses pdfjs-dist directly with Node.js canvas polyfill disabled
  */
 export async function parsePDF(
   buffer: Buffer | ArrayBuffer,
@@ -48,15 +42,45 @@ export async function parsePDF(
   const warnings: string[] = [];
 
   try {
-    // Dynamic import for pdf-parse
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pdfParseModule = await import('pdf-parse') as any;
-    const pdfParse = pdfParseModule.default || pdfParseModule;
+    // Use pdfjs-dist directly for better Node.js compatibility
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+
+    // Disable worker for server-side usage
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
     const data = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
-    const result: PDFParseResult = await pdfParse(data);
+    const uint8Array = new Uint8Array(data);
 
-    let text = result.text;
+    const loadingTask = pdfjsLib.getDocument({
+      data: uint8Array,
+      useSystemFonts: true,
+      // Disable features that require DOM
+      isEvalSupported: false,
+      disableFontFace: true,
+    });
+
+    const pdfDocument = await loadingTask.promise;
+    const numPages = pdfDocument.numPages;
+    const textParts: string[] = [];
+
+    // Extract text from each page
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page = await pdfDocument.getPage(pageNum);
+      const textContent = await page.getTextContent();
+
+      const pageText = textContent.items
+        .map((item) => {
+          if ('str' in item) {
+            return item.str;
+          }
+          return '';
+        })
+        .join(' ');
+
+      textParts.push(pageText);
+    }
+
+    let text = textParts.join('\n\n');
 
     // Clean up the text
     text = cleanText(text, options.preserveFormatting);
@@ -67,16 +91,20 @@ export async function parsePDF(
       warnings.push(`Text truncated to ${options.maxLength} characters`);
     }
 
+    // Get metadata
+    const metadata = await pdfDocument.getMetadata().catch(() => null);
+    const info = metadata?.info as Record<string, unknown> | undefined;
+
     return {
       text,
       metadata: {
-        pageCount: result.numpages,
+        pageCount: numPages,
         wordCount: countWords(text),
         charCount: text.length,
-        title: (result.info?.Title as string) || undefined,
-        author: (result.info?.Author as string) || undefined,
-        createdAt: (result.info?.CreationDate as string) || undefined,
-        modifiedAt: (result.info?.ModDate as string) || undefined,
+        title: info?.Title as string | undefined,
+        author: info?.Author as string | undefined,
+        createdAt: info?.CreationDate as string | undefined,
+        modifiedAt: info?.ModDate as string | undefined,
       },
       warnings,
     };
@@ -271,4 +299,3 @@ export function isSupported(fileType: string): boolean {
     SUPPORTED_EXTENSIONS.includes(normalized as (typeof SUPPORTED_EXTENSIONS)[number])
   );
 }
-
