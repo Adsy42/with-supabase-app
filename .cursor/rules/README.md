@@ -463,6 +463,4 @@ Before every commit/PR:
 │   ├── tdd-workflow.mdc         # Testing
 │   ├── folder-structure.mdc     # Project organization
 │   └── environments.mdc         # Env vars
-└── integrations/
-    └── vercel-ai-sdk.mdc        # AI SDK patterns
 ```
