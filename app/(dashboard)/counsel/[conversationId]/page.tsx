@@ -48,7 +48,7 @@ async function ConversationContent({ conversationId }: { conversationId: string 
       {/* Chat Interface */}
       <ChatInterface
         conversationId={conversationId}
-        matterId={conversation.matter_id ?? undefined}
+        initialMatterId={conversation.matter_id ?? undefined}
         initialMessages={messages}
       />
     </div>

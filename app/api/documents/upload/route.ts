@@ -35,6 +35,13 @@ export async function POST(req: Request) {
       return Response.json({ error: "No file provided" }, { status: 400 });
     }
 
+    if (!matterId) {
+      return Response.json(
+        { error: "Matter ID is required. Documents must be uploaded to a matter." },
+        { status: 400 }
+      );
+    }
+
     // Validate file size (10MB max)
     const MAX_SIZE = 10 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
@@ -74,7 +81,7 @@ export async function POST(req: Request) {
       extracted.name,
       extracted.type,
       extracted.size,
-      matterId ?? undefined
+      matterId
     );
 
     if (!result.success) {

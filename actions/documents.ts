@@ -67,7 +67,7 @@ const IngestDocumentSchema = z.object({
   fileName: z.string().min(1, "File name required"),
   fileType: z.string().default("text/plain"),
   fileSize: z.number().int().positive(),
-  matterId: z.string().uuid().optional(),
+  matterId: z.string().uuid("Valid matter ID required"),
 });
 
 // ============================================================================
@@ -95,13 +95,14 @@ async function getAuthenticatedUser() {
 /**
  * Ingest a document: chunk, embed with Isaacus, classify, and store
  * This is the main entry point for document upload
+ * Documents must be associated with a matter for RAG scoping
  */
 export async function ingestDocument(
   content: string,
   fileName: string,
   fileType: string,
   fileSize: number,
-  matterId?: string
+  matterId: string
 ): Promise<ActionResponse<IngestResult>> {
   const user = await getAuthenticatedUser();
   if (!user) {
@@ -141,7 +142,9 @@ export async function ingestDocument(
 
     if (docError) {
       // If documents table doesn't exist, fall back to chunks-only approach
-      if (docError.code === "42P01") {
+      // 42P01 = undefined_table, PGRST116 = table not found via PostgREST
+      if (docError.code === "42P01" || docError.code === "PGRST116" || docError.message?.includes("does not exist")) {
+        console.log("Documents table not found, falling back to chunks-only approach");
         return ingestDocumentChunksOnly(
           content,
           fileName,
@@ -151,6 +154,7 @@ export async function ingestDocument(
           user.id
         );
       }
+      console.error("Document insert error:", docError);
       throw docError;
     }
 
@@ -260,9 +264,14 @@ export async function ingestDocument(
     };
   } catch (error) {
     console.error("Document ingestion error:", error);
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : "Failed to ingest document";
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to ingest document",
+      error: errorMessage,
     };
   }
 }
@@ -340,10 +349,12 @@ async function ingestDocumentChunksOnly(
       .insert(chunkInserts);
 
     if (chunksError) {
+      console.error("Chunk insert error:", chunksError);
       throw chunksError;
     }
 
     revalidatePath("/counsel");
+    revalidatePath("/documents");
 
     return {
       success: true,
@@ -491,6 +502,7 @@ export async function deleteDocument(
 
     revalidatePath("/counsel");
     revalidatePath("/documents");
+    revalidatePath("/matters");
 
     return { success: true };
   } catch (error) {
@@ -500,6 +512,16 @@ export async function deleteDocument(
       error: error instanceof Error ? error.message : "Failed to delete document",
     };
   }
+}
+
+/**
+ * List documents for a specific matter
+ * Used in matter detail pages
+ */
+export async function listDocumentsForMatter(
+  matterId: string
+): Promise<ActionResponse<Document[]>> {
+  return listDocuments(matterId);
 }
 
 /**

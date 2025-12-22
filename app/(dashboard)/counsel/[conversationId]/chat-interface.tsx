@@ -54,6 +54,7 @@ import {
   DEFAULT_MODE,
   type CounselMode,
 } from "@/components/ai";
+import { MatterSelector } from "@/components/matters/matter-selector";
 import { saveMessage } from "@/actions/conversations";
 import type { Message as DBMessage } from "@/actions/conversations";
 import { getModeConfig } from "@/lib/ai/modes";
@@ -108,7 +109,7 @@ type CombinedMessage = {
 
 interface ChatInterfaceProps {
   conversationId: string;
-  matterId?: string;
+  initialMatterId?: string;
   initialMessages?: DBMessage[];
   /** Initial counsel mode */
   initialMode?: CounselMode;
@@ -116,7 +117,7 @@ interface ChatInterfaceProps {
 
 export function ChatInterface({
   conversationId,
-  matterId,
+  initialMatterId,
   initialMessages = [],
   initialMode = DEFAULT_MODE,
 }: ChatInterfaceProps) {
@@ -125,26 +126,27 @@ export function ChatInterface({
   const [showSuggestions, setShowSuggestions] = React.useState(true);
   const [editingMessageId, setEditingMessageId] = React.useState<string | null>(null);
   const [counselMode, setCounselMode] = React.useState<CounselMode>(initialMode);
+  const [selectedMatterId, setSelectedMatterId] = React.useState<string | null>(initialMatterId ?? null);
   const [showModeSelector, setShowModeSelector] = React.useState(false);
   const [isProcessingFiles, setIsProcessingFiles] = React.useState(false);
 
   // Get current mode config for UI display
   const currentModeConfig = getModeConfig(counselMode);
 
-  // Create transport with API endpoint and extra body params including mode
+  // Create transport with API endpoint and extra body params including mode and matter
   const transport = React.useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
         body: {
           conversationId,
-          matterId,
+          matterId: selectedMatterId,
           mode: "auto_optimize",
           counselMode,
           autoDetectMode: counselMode === "general", // Auto-detect only when in general mode
         },
       }),
-    [conversationId, matterId, counselMode]
+    [conversationId, selectedMatterId, counselMode]
   );
 
   // Use AI SDK v5 useChat hook with transport
@@ -347,16 +349,26 @@ export function ChatInterface({
 
   return (
     <Conversation className="flex-1">
-      {/* Mode Indicator Bar */}
+      {/* Mode & Matter Selector Bar */}
       <div className="flex items-center justify-between border-b border-border px-4 py-2 bg-muted/30">
         <div className="flex items-center gap-3">
+          {/* Counsel Mode Selector */}
           <ModeSelector
             value={counselMode}
             onChange={handleModeChange}
             showDescriptions={true}
           />
-          <span className="text-xs text-muted-foreground hidden md:inline">
-            {currentModeConfig.description}
+          
+          {/* Matter Selector */}
+          <MatterSelector
+            value={selectedMatterId}
+            onChange={setSelectedMatterId}
+          />
+          
+          <span className="text-xs text-muted-foreground hidden lg:inline">
+            {selectedMatterId 
+              ? "Searching within selected matter" 
+              : currentModeConfig.description}
           </span>
         </div>
         <Button
