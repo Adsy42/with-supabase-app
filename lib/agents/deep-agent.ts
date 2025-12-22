@@ -1,45 +1,70 @@
 /**
  * Deep Agent Integration for Legal AI
  *
- * This module provides Deep Agent capabilities for the legal AI assistant.
- * For MVP, we're using a simplified approach that integrates with existing tools.
- * Future enhancements will add full Deep Agent middleware (planning, file system, subagents).
+ * This module provides the main entry point for creating Deep Agent instances.
+ * The implementation uses LangGraph for the agent architecture with:
+ * - Isaacus-powered tools for legal document analysis
+ * - Supabase for persistent storage and vector search
+ * - CopilotKit for the frontend chat interface
+ *
+ * @see https://docs.langchain.com/oss/javascript/langgraph
+ * @see https://docs.isaacus.com/capabilities/introduction
  */
 
-import { createDeepAgent } from 'deepagents';
-import { ChatAnthropic } from '@langchain/anthropic';
+import { createLegalAgentGraph, type LegalAgentConfig } from './graph';
 import { LEGAL_AGENT_SYSTEM_PROMPT } from './harness';
 
 /**
  * Create a Deep Agent instance for legal AI assistance
- * 
- * Note: For MVP, this is a placeholder that will be enhanced with:
- * - Full tool integration
- * - Supabase backend for persistent memory
- * - Subagent middleware
- * - File system middleware
- * 
- * @param userId - User ID for scoping tools and memory (will be used in future)
- * @param conversationId - Conversation ID for context (will be used in future)
+ *
+ * This creates a LangGraph-based agent with full tool integration for:
+ * - Document search (Isaacus embeddings + Supabase vector store)
+ * - Reranking and extractive QA (Isaacus)
+ * - Clause classification and risk analysis (Isaacus)
+ * - Task planning (todos)
+ * - Long-term memory storage
+ *
+ * @param userId - User ID for scoping tools and memory
+ * @param conversationId - Conversation ID for message and todo context
+ * @param matterId - Optional matter ID for document scoping
+ *
+ * @example
+ * ```typescript
+ * const agent = createLegalDeepAgent(
+ *   user.id,
+ *   conversationId,
+ *   matterId
+ * );
+ *
+ * const result = await agent.invoke({
+ *   messages: [new HumanMessage("Find indemnification clauses")],
+ *   userId: user.id,
+ *   conversationId,
+ * });
+ * ```
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function createLegalDeepAgent(userId: string, conversationId?: string) {
-  // Get the model
-  const model = new ChatAnthropic({
+export function createLegalDeepAgent(
+  userId: string,
+  conversationId: string,
+  matterId?: string
+) {
+  const config: LegalAgentConfig = {
+    userId,
+    conversationId,
+    matterId,
     model: 'claude-sonnet-4-20250514',
     temperature: 0.7,
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
+  };
 
-  // Create the deep agent with basic configuration
-  // TODO: Add tool integration, Supabase backend, and middleware
-  const agent = createDeepAgent({
-    model,
-    systemPrompt: LEGAL_AGENT_SYSTEM_PROMPT,
-    // Tools will be added in future iteration
-    // Backend will use Supabase store for persistent memory
-  });
-
-  return agent;
+  return createLegalAgentGraph(config);
 }
 
+/**
+ * Re-export the system prompt for use in other modules
+ */
+export { LEGAL_AGENT_SYSTEM_PROMPT };
+
+/**
+ * Re-export types for convenience
+ */
+export type { LegalAgentConfig } from './graph';

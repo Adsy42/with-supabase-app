@@ -2,6 +2,7 @@
  * Individual Chat Conversation Page
  *
  * Displays a single conversation with CopilotKit chat interface.
+ * Passes conversationId to the backend for tool context and message persistence.
  */
 
 'use client';
@@ -20,6 +21,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 interface Conversation {
   id: string;
   title: string | null;
+  matter_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,7 +39,7 @@ export default function ChatPage() {
         const supabase = createClient();
         const { data, error: fetchError } = await supabase
           .from('conversations')
-          .select('id, title, created_at, updated_at')
+          .select('id, title, matter_id, created_at, updated_at')
           .eq('id', conversationId)
           .single();
 
@@ -47,7 +49,7 @@ export default function ChatPage() {
         }
 
         setConversation(data);
-      } catch (err) {
+      } catch {
         setError('Failed to load conversation');
       } finally {
         setLoading(false);
@@ -101,7 +103,13 @@ export default function ChatPage() {
   }
 
   return (
-    <CopilotKit runtimeUrl="/api/copilotkit">
+    <CopilotKit
+      runtimeUrl="/api/copilotkit"
+      properties={{
+        conversationId: conversation.id,
+        matterId: conversation.matter_id || undefined,
+      }}
+    >
       <div className="flex h-full flex-col">
         <DashboardHeader title={conversation.title || 'Chat'}>
           <Link href="/dashboard/chat">
@@ -113,9 +121,12 @@ export default function ChatPage() {
         </DashboardHeader>
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto">
             <ErrorBoundary>
-              <ChatClient conversationId={conversationId} />
+              <ChatClient
+                conversationId={conversationId}
+                matterId={conversation.matter_id || undefined}
+              />
             </ErrorBoundary>
           </div>
         </div>

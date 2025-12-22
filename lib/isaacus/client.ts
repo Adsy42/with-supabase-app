@@ -71,8 +71,8 @@ export class IsaacusClient {
     this.baseUrl = config?.baseUrl || 'https://api.isaacus.com/v1';
 
     if (!this.apiKey) {
-      console.warn(
-        'IsaacusClient: No API key provided. Set ISAACUS_API_KEY environment variable.'
+      throw new Error(
+        'ISAACUS_API_KEY is required. Get your API key at https://isaacus.com'
       );
     }
   }

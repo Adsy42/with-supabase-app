@@ -1,23 +1,47 @@
 /**
  * CopilotKit Runtime API Route
  *
- * Connects CopilotKit frontend to the Deep Agent using Anthropic adapter.
- * For MVP, we use AnthropicAdapter with our tools, then enhance with full Deep Agent integration.
+ * Connects CopilotKit frontend to the LangGraph Deep Agent.
+ * Uses LangChainAdapter to invoke our custom legal AI agent with:
+ * - Isaacus-powered tools (embedding, reranking, QA, classification)
+ * - Supabase vector store for document search
+ * - Persistent memory and task planning
  */
 
-import { CopilotRuntime, copilotRuntimeNextJSAppRouterEndpoint, AnthropicAdapter } from '@copilotkit/runtime';
+import {
+  CopilotRuntime,
+  copilotRuntimeNextJSAppRouterEndpoint,
+} from '@copilotkit/runtime';
 import { createClient } from '@/lib/supabase/server';
+import {
+  createLangGraphAdapter,
+  extractConversationId,
+  extractMatterId,
+} from '@/lib/agents/adapter';
 
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
-    // Check for API key first
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
+    // Check for required API keys
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey) {
       return new Response(
         JSON.stringify({
           error: 'ANTHROPIC_API_KEY is not configured. Please add it to your environment variables.',
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    const isaacusKey = process.env.ISAACUS_API_KEY;
+    if (!isaacusKey) {
+      return new Response(
+        JSON.stringify({
+          error: 'ISAACUS_API_KEY is not configured. Get your key at https://isaacus.com',
         }),
         {
           status: 500,
@@ -42,26 +66,52 @@ export async function POST(request: Request) {
       );
     }
 
-    // Parse request to get conversation ID if available
-    let conversationId: string | undefined;
+    // Parse request to extract properties
+    let properties: Record<string, unknown> | undefined;
     try {
       const body = await request.clone().json();
-      conversationId = body?.conversationId as string | undefined;
+      properties = body?.properties as Record<string, unknown> | undefined;
     } catch {
       // Request body might not be JSON, that's okay
     }
 
-    // Use Anthropic adapter
-    // API key is read from ANTHROPIC_API_KEY env var
-    // System prompt is set in the frontend CopilotKit component
-    // TODO: Integrate tools with AnthropicAdapter in next iteration
-    // Tools are defined in lib/agents/harness.ts and will be connected
-    // when we fully integrate Deep Agents with CopilotKit
+    // Extract conversation and matter IDs from properties
+    const conversationId = extractConversationId(properties);
+    const matterId = extractMatterId(properties);
+
+    // Create or get conversation if not provided
+    let activeConversationId = conversationId;
+    if (!activeConversationId) {
+      // Create a new conversation for this chat session
+      const { data: newConversation, error: convError } = await supabase
+        .from('conversations')
+        .insert({
+          user_id: user.id,
+          title: 'New Conversation',
+          matter_id: matterId,
+        })
+        .select('id')
+        .single();
+
+      if (convError) {
+        console.error('Failed to create conversation:', convError);
+        // Continue without conversation ID - planning tools will be disabled
+      } else {
+        activeConversationId = newConversation.id;
+      }
+    }
+
+    // Create the LangGraph adapter with user context
+    const adapter = createLangGraphAdapter({
+      userId: user.id,
+      conversationId: activeConversationId || '',
+      matterId,
+    });
+
+    // Create the CopilotKit endpoint
     const endpoint = copilotRuntimeNextJSAppRouterEndpoint({
       runtime: new CopilotRuntime(),
-      serviceAdapter: new AnthropicAdapter({
-        model: 'claude-sonnet-4-20250514',
-      }),
+      serviceAdapter: adapter,
       endpoint: '/api/copilotkit',
     });
 
