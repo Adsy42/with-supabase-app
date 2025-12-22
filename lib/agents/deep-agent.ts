@@ -5,14 +5,21 @@
  * - Built-in planning (write_todos)
  * - File system tools for context management
  * - Subagent spawning capability
- * - Persistent storage via custom Supabase backend
+ * - Persistent storage via CompositeBackend with StoreBackend for /memories/
  *
  * @see https://docs.langchain.com/oss/javascript/deepagents/overview
  */
 
-import { createDeepAgent, StateBackend } from 'deepagents';
+import {
+  createDeepAgent,
+  StateBackend,
+  StoreBackend,
+  CompositeBackend,
+  type SubAgent,
+} from 'deepagents';
 import { ChatAnthropic } from '@langchain/anthropic';
-import type { DynamicStructuredTool } from '@langchain/core/tools';
+import { InMemoryStore } from '@langchain/langgraph-checkpoint';
+import type { StructuredTool } from '@langchain/core/tools';
 
 import {
   createSearchDocumentsTool,
@@ -42,16 +49,17 @@ For complex tasks, use the built-in write_todos tool to:
 - Plan and execute contract analysis workflows
 
 ### File System for Context
-Use file system tools (ls, read_file, write_file) to:
-- Store intermediate research findings
+Use file system tools (ls, read_file, write_file, edit_file) to:
+- Store intermediate research findings in /workspace/
+- Save important memories to /memories/ for cross-conversation persistence
 - Manage large document excerpts
 - Keep notes during complex analysis
 
 ### Subagent Delegation
 Use the task tool to spawn focused subagents for:
-- Deep-dive research on specific legal topics
-- Isolated contract clause analysis
-- Parallel document review tasks
+- "legal-research": Deep-dive research on specific legal topics
+- "contract-analysis": Isolated contract clause analysis
+- "document-qa": Precise question answering from documents
 
 ## Your Legal AI Tools
 
@@ -66,9 +74,10 @@ Use the task tool to spawn focused subagents for:
 ## Workflow Guidelines
 
 1. For simple questions: Search documents, extract answers, respond directly
-2. For complex research: Create a todo plan, execute step by step, store findings
+2. For complex research: Create a todo plan, execute step by step, store findings in /workspace/
 3. For contract review: Plan the analysis, classify clauses, assess risks, summarize
 4. For deep research: Spawn subagents for parallel investigation
+5. For user preferences: Store in /memories/ for future reference
 
 ## Response Guidelines
 
@@ -112,12 +121,66 @@ export interface LegalDeepAgentConfig {
 }
 
 /**
+ * Subagent configurations for specialized legal tasks
+ */
+const LEGAL_SUBAGENTS: SubAgent[] = [
+  {
+    name: 'legal-research',
+    description:
+      'Specialized agent for comprehensive legal research. Searches documents, reranks results, and synthesizes findings. Use for deep-dive research on specific legal topics.',
+    systemPrompt: `You are a specialized legal research assistant. Your role is to:
+1. Search and Retrieve: Find relevant legal documents and provisions
+2. Analyze and Synthesize: Combine information from multiple sources
+3. Cite Sources: Always reference which documents your answers come from
+4. Be Thorough: Consider multiple angles and related concepts
+
+Always cite your sources with document names and relevant quotes.`,
+  },
+  {
+    name: 'contract-analysis',
+    description:
+      'Specialized agent for contract review and analysis. Classifies clauses, identifies risks, and provides detailed contract insights. Use for focused contract review tasks.',
+    systemPrompt: `You are a specialized contract analysis assistant. Your role is to:
+1. Classify Clauses: Identify clause types (indemnification, limitation of liability, etc.)
+2. Assess Risks: Evaluate potential legal risks in provisions
+3. Compare: Note unusual or non-standard terms
+4. Summarize: Provide clear executive summaries
+
+Focus on practical implications and actionable insights.`,
+  },
+  {
+    name: 'document-qa',
+    description:
+      'Specialized agent for precise question answering from legal documents. Extracts exact answers with citations. Use when you need specific information from documents.',
+    systemPrompt: `You are a specialized document Q&A assistant. Your role is to:
+1. Find Answers: Locate precise answers to specific questions
+2. Extract: Use extractive QA to find exact text spans
+3. Cite: Always provide the source document and relevant quotes
+4. Verify: Cross-reference information when possible
+
+Be precise and avoid speculation. If the answer isn't in the documents, say so.`,
+  },
+];
+
+// Shared in-memory store for persistent memories across conversations
+// In production, this should be replaced with a persistent store (e.g., Supabase-backed)
+let sharedStore: InMemoryStore | null = null;
+
+function getSharedStore(): InMemoryStore {
+  if (!sharedStore) {
+    sharedStore = new InMemoryStore();
+  }
+  return sharedStore;
+}
+
+/**
  * Create a Deep Agent instance for legal AI assistance
  *
  * This creates a proper Deep Agent with:
  * - Built-in planning capabilities (write_todos)
- * - File system tools for context management
- * - Subagent spawning
+ * - File system tools for context management (ls, read_file, write_file, edit_file)
+ * - Subagent spawning (task tool) for legal-research, contract-analysis, document-qa
+ * - CompositeBackend for persistent /memories/ storage
  * - Our custom Isaacus-powered legal tools
  *
  * @example
@@ -153,8 +216,8 @@ export function createLegalDeepAgent(config: LegalDeepAgentConfig) {
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
 
-  // Create our legal tools (type assertion needed for compatibility)
-  const legalTools: DynamicStructuredTool[] = [
+  // Create our legal tools
+  const legalTools: StructuredTool[] = [
     // Document search (Isaacus embeddings + Supabase vector)
     createSearchDocumentsTool(userId, matterId),
     createGetDocumentInfoTool(userId),
@@ -165,7 +228,10 @@ export function createLegalDeepAgent(config: LegalDeepAgentConfig) {
     extractAnswerTool,
     classifyClausesTool,
     analyzeRiskTool,
-  ];
+  ] as StructuredTool[];
+
+  // Get the shared store for persistent memories
+  const store = getSharedStore();
 
   // Create the Deep Agent with our legal tools
   // The Deep Agent automatically includes:
@@ -176,12 +242,16 @@ export function createLegalDeepAgent(config: LegalDeepAgentConfig) {
     model: llm,
     tools: legalTools,
     systemPrompt: LEGAL_DEEP_AGENT_SYSTEM_PROMPT,
-    // Use StateBackend by default (ephemeral per thread)
-    // TODO: Implement custom Supabase backend for cross-thread persistence
-    backend: (rt) => new StateBackend(rt),
+    subagents: LEGAL_SUBAGENTS,
+    store,
+    // CompositeBackend: ephemeral StateBackend for /workspace/, persistent StoreBackend for /memories/
+    backend: (stateAndStore) =>
+      new CompositeBackend(new StateBackend(stateAndStore), {
+        '/memories/': new StoreBackend(stateAndStore),
+      }),
+    name: 'orderly-legal-agent',
   });
 
   return agent;
 }
 
-// LegalDeepAgentConfig is exported via the interface declaration above

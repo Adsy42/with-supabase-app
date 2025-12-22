@@ -7,33 +7,20 @@
  * @example
  * ```typescript
  * import {
- *   createLegalAgentGraph,
+ *   createLegalDeepAgent,
  *   createLangGraphAdapter,
  *   createLegalTools,
- *   LEGAL_AGENT_SYSTEM_PROMPT,
+ *   LEGAL_DEEP_AGENT_SYSTEM_PROMPT,
  * } from '@/lib/agents';
  * ```
  */
 
-// Core graph
+// Deep Agent (primary)
 export {
-  createLegalAgentGraph,
-  invokeLegalAgent,
-  streamLegalAgent,
-  createAgentWithHistory,
-  type LegalAgentConfig,
-  type LegalAgentGraph,
-} from './graph';
-
-// Agent state
-export {
-  AgentState,
-  type AgentStateType,
-  type AgentInput,
-  type AgentOutput,
-  type AgentTodoItem,
-  type DocumentReference,
-} from './state';
+  createLegalDeepAgent,
+  LEGAL_DEEP_AGENT_SYSTEM_PROMPT,
+  type LegalDeepAgentConfig,
+} from './deep-agent';
 
 // CopilotKit adapter
 export {
@@ -43,7 +30,7 @@ export {
   type LangGraphAdapterConfig,
 } from './adapter';
 
-// Tools
+// Domain-specific tools
 export { createLegalTools } from './tools';
 export {
   rerankTool,
@@ -52,9 +39,30 @@ export {
   riskTool,
 } from './tools';
 
-// System prompt
-export { LEGAL_AGENT_SYSTEM_PROMPT } from './harness';
+// Legacy exports for backward compatibility
+// (LangGraph StateGraph-based agent)
+export {
+  createLegalAgentGraph,
+  invokeLegalAgent,
+  streamLegalAgent,
+  createAgentWithHistory,
+  type LegalAgentConfig,
+  type LegalAgentGraph,
+} from './graph';
 
-// Legacy exports (for backward compatibility)
-export { createLegalAgentTools, legalAgentConfig } from './harness';
+// Legacy state (for StateGraph-based agent)
+export {
+  AgentState,
+  type AgentStateType,
+  type AgentInput,
+  type AgentOutput,
+  type AgentTodoItem,
+  type DocumentReference,
+} from './state';
 
+// Legacy exports from harness (deprecated)
+export {
+  LEGAL_AGENT_SYSTEM_PROMPT,
+  createLegalAgentTools,
+  legalAgentConfig,
+} from './harness';

@@ -1,13 +1,16 @@
 /**
  * Legal AI Tools Registry
  *
- * Consolidates all tools available to the Deep Agent:
+ * Consolidates domain-specific tools available to the Deep Agent:
  * - Document search (Isaacus embeddings + Supabase vector)
  * - Isaacus-powered analysis (rerank, extract, classify, risk)
- * - Task planning (todos)
- * - Long-term memory
+ *
+ * NOTE: Planning (write_todos) and file system tools (ls, read_file, write_file, edit_file)
+ * are now built into the Deep Agent via the deepagents library.
+ * Memory is handled via the /memories/ path in the Deep Agent's CompositeBackend.
  *
  * @see https://docs.isaacus.com/capabilities/introduction
+ * @see https://docs.langchain.com/oss/javascript/deepagents/overview
  */
 
 import { DynamicStructuredTool } from '@langchain/core/tools';
@@ -427,321 +430,24 @@ Powered by Isaacus classification for legal risk assessment.`,
 });
 
 // ============================================================================
-// TASK PLANNING TOOLS
-// ============================================================================
-
-/**
- * Create write todos tool for task planning
- */
-export function createWriteTodosTool(conversationId: string) {
-  return new DynamicStructuredTool({
-    name: 'write_todos',
-    description: `Create a task plan for complex legal work.
-Use this when you need to break down a complex question into steps.
-Creates tracked todo items that you can complete one by one.`,
-    schema: z.object({
-      todos: z
-        .array(
-          z.object({
-            content: z.string().describe('Description of the task'),
-            parentId: z.string().optional().describe('ID of parent todo for subtasks'),
-          })
-        )
-        .describe('List of todo items to create'),
-    }),
-    func: async ({ todos }) => {
-      if (!conversationId) {
-        return JSON.stringify({ error: 'No conversation context', todos: [] });
-      }
-
-      try {
-        const supabase = await createClient();
-        const created = [];
-
-        for (let i = 0; i < todos.length; i++) {
-          const todo = todos[i];
-          const { data, error } = await supabase
-            .from('agent_todos')
-            .insert({
-              conversation_id: conversationId,
-              parent_id: todo.parentId,
-              content: todo.content,
-              status: 'pending',
-              order_index: i,
-            })
-            .select()
-            .single();
-
-          if (error) throw error;
-
-          created.push({
-            id: data.id,
-            content: data.content,
-            status: data.status,
-          });
-        }
-
-        return JSON.stringify({
-          message: `Created ${created.length} task(s)`,
-          todos: created,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        return JSON.stringify({ error: `Failed to create todos: ${message}`, todos: [] });
-      }
-    },
-  });
-}
-
-/**
- * Update todo status tool
- */
-export function createUpdateTodoTool(conversationId: string) {
-  return new DynamicStructuredTool({
-    name: 'update_todo',
-    description: `Update the status of a task in your plan.
-Use this to mark tasks as in_progress, completed, or cancelled.`,
-    schema: z.object({
-      todoId: z.string().describe('The ID of the todo to update'),
-      status: z
-        .enum(['pending', 'in_progress', 'completed', 'cancelled'])
-        .describe('New status for the todo'),
-      result: z.string().optional().describe('Result or notes for completed tasks'),
-    }),
-    func: async ({ todoId, status, result }) => {
-      if (!conversationId) {
-        return JSON.stringify({ error: 'No conversation context' });
-      }
-
-      try {
-        const supabase = await createClient();
-
-        const { error } = await supabase
-          .from('agent_todos')
-          .update({
-            status,
-            result,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', todoId);
-
-        if (error) throw error;
-
-        return JSON.stringify({
-          message: `Updated task ${todoId} to ${status}`,
-          todoId,
-          status,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        return JSON.stringify({ error: `Failed to update todo: ${message}` });
-      }
-    },
-  });
-}
-
-/**
- * Get current todos tool
- */
-export function createGetTodosTool(conversationId: string) {
-  return new DynamicStructuredTool({
-    name: 'get_todos',
-    description: `Get the current task plan and progress.
-Use this to see what tasks are pending or in progress.`,
-    schema: z.object({
-      includeCompleted: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Whether to include completed tasks'),
-    }),
-    func: async ({ includeCompleted }) => {
-      if (!conversationId) {
-        return JSON.stringify({ error: 'No conversation context', todos: [] });
-      }
-
-      try {
-        const supabase = await createClient();
-
-        let query = supabase
-          .from('agent_todos')
-          .select('*')
-          .eq('conversation_id', conversationId)
-          .order('order_index');
-
-        if (!includeCompleted) {
-          query = query.in('status', ['pending', 'in_progress']);
-        }
-
-        const { data, error } = await query;
-
-        if (error) throw error;
-
-        return JSON.stringify({
-          count: data?.length ?? 0,
-          todos:
-            data?.map((t) => ({
-              id: t.id,
-              content: t.content,
-              status: t.status,
-              result: t.result,
-            })) ?? [],
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        return JSON.stringify({ error: `Failed to get todos: ${message}`, todos: [] });
-      }
-    },
-  });
-}
-
-// ============================================================================
-// MEMORY TOOLS
-// ============================================================================
-
-/**
- * Store memory tool for long-term persistence
- */
-export function createStoreMemoryTool(userId: string) {
-  return new DynamicStructuredTool({
-    name: 'store_memory',
-    description: `Store information for future reference.
-Use this to remember important details, preferences, or learned patterns about the user.`,
-    schema: z.object({
-      key: z.string().describe('Unique key to store the memory under'),
-      value: z.unknown().describe('The information to store'),
-      namespace: z.string().optional().default('default').describe('Category for the memory'),
-    }),
-    func: async ({ key, value, namespace }) => {
-      try {
-        const supabase = await createClient();
-
-        const { error } = await supabase.from('agent_memories').upsert(
-          {
-            user_id: userId,
-            namespace: namespace || 'default',
-            key,
-            value,
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: 'user_id,namespace,key',
-          }
-        );
-
-        if (error) throw error;
-
-        return JSON.stringify({
-          message: `Stored memory: ${key}`,
-          key,
-          namespace,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        return JSON.stringify({ error: `Failed to store memory: ${message}` });
-      }
-    },
-  });
-}
-
-/**
- * Recall memory tool
- */
-export function createRecallMemoryTool(userId: string) {
-  return new DynamicStructuredTool({
-    name: 'recall_memory',
-    description: `Recall previously stored information.
-Use this to retrieve memories, preferences, or context from past conversations.`,
-    schema: z.object({
-      key: z.string().describe('The key to recall'),
-      namespace: z.string().optional().default('default').describe('Category to search in'),
-    }),
-    func: async ({ key, namespace }) => {
-      try {
-        const supabase = await createClient();
-
-        const { data, error } = await supabase
-          .from('agent_memories')
-          .select('value')
-          .eq('user_id', userId)
-          .eq('namespace', namespace || 'default')
-          .eq('key', key)
-          .single();
-
-        if (error) {
-          if (error.code === 'PGRST116') {
-            return JSON.stringify({
-              message: `No memory found for key: ${key}`,
-              key,
-              value: null,
-            });
-          }
-          throw error;
-        }
-
-        return JSON.stringify({
-          message: `Recalled memory: ${key}`,
-          key,
-          value: data?.value,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        return JSON.stringify({ error: `Failed to recall memory: ${message}`, value: null });
-      }
-    },
-  });
-}
-
-/**
- * List memories tool
- */
-export function createListMemoriesTool(userId: string) {
-  return new DynamicStructuredTool({
-    name: 'list_memories',
-    description: `List all stored memories in a namespace.
-Use this to see what information has been stored for the user.`,
-    schema: z.object({
-      namespace: z.string().optional().default('default').describe('Namespace to list'),
-    }),
-    func: async ({ namespace }) => {
-      try {
-        const supabase = await createClient();
-
-        const { data, error } = await supabase
-          .from('agent_memories')
-          .select('key, updated_at')
-          .eq('user_id', userId)
-          .eq('namespace', namespace || 'default')
-          .order('key');
-
-        if (error) throw error;
-
-        return JSON.stringify({
-          namespace,
-          count: data?.length ?? 0,
-          keys: data?.map((m) => ({ key: m.key, updatedAt: m.updated_at })) ?? [],
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        return JSON.stringify({ error: `Failed to list memories: ${message}`, keys: [] });
-      }
-    },
-  });
-}
-
-// ============================================================================
 // TOOL REGISTRY
 // ============================================================================
 
 /**
- * Create all legal AI tools with user and conversation context
+ * Create domain-specific legal AI tools
+ *
+ * NOTE: This does NOT include planning or memory tools anymore.
+ * The Deep Agent provides those capabilities via its built-in middleware:
+ * - write_todos for planning
+ * - File system tools (ls, read_file, write_file, edit_file) for context management
+ * - /memories/ path routes to persistent StoreBackend
  */
 export function createLegalTools(
   userId: string,
-  conversationId?: string,
+  _conversationId?: string,
   matterId?: string
 ): DynamicStructuredTool[] {
-  const tools: DynamicStructuredTool[] = [
+  return [
     // Document search (Isaacus embeddings + Supabase vector)
     createSearchDocumentsTool(userId, matterId),
     createGetDocumentInfoTool(userId),
@@ -752,23 +458,7 @@ export function createLegalTools(
     extractAnswerTool,
     classifyClausesTool,
     analyzeRiskTool,
-
-    // Memory tools
-    createStoreMemoryTool(userId),
-    createRecallMemoryTool(userId),
-    createListMemoriesTool(userId),
   ];
-
-  // Add planning tools if conversation context is available
-  if (conversationId) {
-    tools.push(
-      createWriteTodosTool(conversationId),
-      createUpdateTodoTool(conversationId),
-      createGetTodosTool(conversationId)
-    );
-  }
-
-  return tools;
 }
 
 /**
@@ -781,4 +471,3 @@ export {
   classifyClausesTool as classifyTool,
   analyzeRiskTool as riskTool,
 };
-

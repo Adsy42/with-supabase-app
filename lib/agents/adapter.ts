@@ -1,30 +1,23 @@
 /**
- * CopilotKit LangChain Adapter
+ * CopilotKit LangGraph Adapter
  *
- * Bridges CopilotKit runtime with our legal AI tools.
+ * Bridges CopilotKit runtime with the Deep Agent for legal AI assistance.
  *
- * Current Implementation:
- * Uses ChatAnthropic with bound legal tools, which CopilotKit can stream properly.
- *
- * Future Path to Full Deep Agent:
- * The `deepagents` library provides planning, file system, and subagent capabilities.
- * To fully leverage Deep Agents with CopilotKit, you would need:
- * 1. Deploy the Deep Agent to LangGraph Platform
- * 2. Use CopilotKit's `useCoAgent` hook with the deployed agent
- * 3. Or use CopilotKit's `LangGraphAgent` adapter for remote agents
+ * Uses the Deep Agent which provides:
+ * - Built-in planning (write_todos)
+ * - File system tools for context management
+ * - Subagent spawning capability
+ * - Our custom Isaacus-powered legal tools
  *
  * @see https://docs.copilotkit.ai/reference/classes/llm-adapters/LangChainAdapter
  * @see https://docs.langchain.com/oss/javascript/deepagents/overview
  */
 
 import { LangChainAdapter } from '@copilotkit/runtime';
-import { ChatAnthropic } from '@langchain/anthropic';
-import { SystemMessage } from '@langchain/core/messages';
 import type { BaseMessage } from '@langchain/core/messages';
-import type { DynamicStructuredTool } from '@langchain/core/tools';
+import { AIMessage, SystemMessage } from '@langchain/core/messages';
 
-import { createLegalTools } from './tools';
-import { LEGAL_DEEP_AGENT_SYSTEM_PROMPT } from './deep-agent';
+import { createLegalDeepAgent, LEGAL_DEEP_AGENT_SYSTEM_PROMPT } from './deep-agent';
 
 /**
  * Parameters passed to the chain function by CopilotKit
@@ -32,7 +25,6 @@ import { LEGAL_DEEP_AGENT_SYSTEM_PROMPT } from './deep-agent';
 interface ChainFnParameters {
   model: string;
   messages: BaseMessage[];
-  tools: DynamicStructuredTool[];
   threadId?: string;
   runId?: string;
 }
@@ -58,20 +50,61 @@ export interface LangGraphAdapterConfig {
 }
 
 /**
- * Create a CopilotKit-compatible adapter using ChatAnthropic with legal tools
+ * Convert CopilotKit messages to the format expected by Deep Agent
+ */
+function prepareMessages(messages: BaseMessage[]): BaseMessage[] {
+  // Check if system message already exists
+  const hasSystemMessage = messages.some((m) => m._getType() === 'system');
+
+  // Add system prompt if not present
+  if (!hasSystemMessage) {
+    return [new SystemMessage(LEGAL_DEEP_AGENT_SYSTEM_PROMPT), ...messages];
+  }
+
+  return messages;
+}
+
+/**
+ * Extract text content from an AIMessage that may have complex content
+ */
+function extractTextContent(message: AIMessage): string {
+  const content = message.content;
+
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  // Handle array content (e.g., from Anthropic)
+  if (Array.isArray(content)) {
+    return content
+      .map((block) => {
+        if (typeof block === 'string') {
+          return block;
+        }
+        if (block && typeof block === 'object' && 'text' in block) {
+          return (block as { text: string }).text;
+        }
+        return '';
+      })
+      .join('');
+  }
+
+  return String(content);
+}
+
+/**
+ * Create a CopilotKit-compatible adapter using the Deep Agent
  *
  * This adapter:
  * 1. Receives messages from CopilotKit frontend
- * 2. Adds the system prompt if not present
- * 3. Uses ChatAnthropic with bound legal tools
- * 4. Streams the response back to CopilotKit
+ * 2. Creates a Deep Agent with full capabilities
+ * 3. Returns the response to CopilotKit
  *
- * Legal tools included:
- * - Document search (Isaacus embeddings + Supabase vector)
- * - Reranking and extractive QA (Isaacus)
- * - Clause classification and risk analysis (Isaacus)
- * - Task planning (todos) when conversationId is provided
- * - Long-term memory storage
+ * Deep Agent capabilities:
+ * - Planning with write_todos
+ * - File system tools (ls, read_file, write_file, edit_file)
+ * - Subagent spawning with task tool
+ * - Legal AI tools (search, rerank, extract, classify, analyze)
  *
  * @example
  * ```typescript
@@ -92,35 +125,67 @@ export function createLangGraphAdapter(
 ): LangChainAdapter {
   const { userId, conversationId, matterId } = config;
 
-  // Create the model
-  const model = new ChatAnthropic({
-    model: 'claude-sonnet-4-20250514',
-    temperature: 0.7,
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
-
-  // Create our legal tools with user context
-  // This includes Isaacus-powered search, analysis, and planning tools
-  const tools = createLegalTools(userId, conversationId, matterId);
-
-  // Bind tools to the model
-  const modelWithTools = model.bindTools(tools);
-
   return new LangChainAdapter({
     chainFn: async (params: ChainFnParameters) => {
-      const { messages } = params;
+      const { messages, threadId } = params;
 
-      // Add system prompt if not present
-      const hasSystemMessage = messages.some((m) => m._getType() === 'system');
-      const allMessages: BaseMessage[] = hasSystemMessage
-        ? messages
-        : [new SystemMessage(LEGAL_DEEP_AGENT_SYSTEM_PROMPT), ...messages];
+      // Create the Deep Agent with user context
+      // The Deep Agent includes all capabilities:
+      // - write_todos for planning
+      // - File system tools
+      // - task tool for subagents
+      // - Our legal AI tools
+      const agent = createLegalDeepAgent({
+        userId,
+        conversationId,
+        matterId,
+      });
 
-      // Stream the response from the model
-      // The LangChainAdapter can handle the stream from ChatAnthropic
-      const stream = await modelWithTools.stream(allMessages);
+      // Prepare messages with system prompt
+      const preparedMessages = prepareMessages(messages);
 
-      return stream;
+      try {
+        // Invoke the Deep Agent
+        // The agent returns the final state with all messages
+        const result = await agent.invoke(
+          { messages: preparedMessages },
+          {
+            configurable: {
+              thread_id: threadId || conversationId,
+            },
+          }
+        );
+
+        // Extract the last AI message from the result
+        const resultMessages = result.messages as BaseMessage[];
+        const lastMessage = resultMessages[resultMessages.length - 1];
+
+        if (lastMessage && lastMessage._getType() === 'ai') {
+          const aiMessage = lastMessage as AIMessage;
+          const textContent = extractTextContent(aiMessage);
+
+          // Return an AIMessage that CopilotKit can handle
+          return new AIMessage({
+            content: textContent,
+            tool_calls: aiMessage.tool_calls,
+          });
+        }
+
+        // Fallback if no AI message found
+        return new AIMessage({
+          content:
+            'I apologize, but I was unable to generate a response. Please try again.',
+        });
+      } catch (error) {
+        console.error('Deep Agent error:', error);
+
+        // Return error message
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        return new AIMessage({
+          content: `I encountered an error while processing your request: ${errorMessage}. Please try again.`,
+        });
+      }
     },
   });
 }
